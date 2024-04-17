@@ -1,6 +1,8 @@
 use serde::Serialize;
 
-#[derive(Debug, thiserror::Error)]
+pub type Result<T> = core::result::Result<T, AppError>;
+
+#[derive(Debug, thiserror::Error, Clone)]
 pub enum AppError {
     #[error("Couldn't parse this latex string: {0}")]
     ParseError(String),
@@ -9,7 +11,7 @@ pub enum AppError {
 }
 
 impl Serialize for AppError {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
     where S: serde::Serializer {
         serializer.serialize_str(self.to_string().as_str())
     }

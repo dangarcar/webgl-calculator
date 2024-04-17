@@ -2,35 +2,38 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod error;
+mod parser;
 
 use std::sync::Mutex;
 use std::str;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use crate::error::AppError;
+use crate::{error::AppError, parser::parse_latex};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Response {
-    text: String,
+    code: String,
     num: Option<f64>
 }
 
 #[tauri::command]
 //TODO: make this function calculate something
-fn process(eq: &str) -> Result<Response, AppError> {
+fn process(eq: &str) -> error::Result<Response> {
     println!("{}", eq);
+    
+    parse_latex(eq)?;
     
     if eq.contains('z') { return Err(AppError::ParseError("A equation can't contain z".to_string())); }
 
     return Ok(Response {
-        text: String::from("hello"),
+        code: String::from("return fneg(fsub(x*x, y));"),
         num: if eq.contains('q') { Some(1.41) } else { None }
     });
 }
 
 #[tauri::command]
-fn add_variable(name: char, content: &str) -> Result<(), AppError> {
+fn add_variable(name: char, content: &str) -> error::Result<()> {
     todo!();
     Ok(())
 }

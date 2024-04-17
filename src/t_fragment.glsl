@@ -36,20 +36,21 @@ int fneg(float x);
 float fsin(float x);
 float fcos(float x);
 
-int eval(ivec2 p, int opt) {
+int eval(ivec2 p, int opt);
+
+/*int eval(ivec2 p, int opt) {
     float x = float(p.x)*UNIT, y = float(p.y)*UNIT;
 
-    /*if(opt == 0)
-        return fneg(fsub(fsin(x), y));
-    if(opt == 1)
-        return fneg(fsub(tan(x), y));*/
     if(opt == 0)
         return fneg(fsub(x, y));
     else
         return fneg(fsub((x-float(opt))*(x-float(opt)), y));
 
     return 0;
-}
+}*/
+
+//To change dinamically the eval function
+%eval%
 
 bool line(ivec2 p, int opt) {
     int g = eval(p + ivec2(-WIDTH, -WIDTH), opt)

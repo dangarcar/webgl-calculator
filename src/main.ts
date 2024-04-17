@@ -12,21 +12,22 @@ moreBtn?.addEventListener("click", () => {
     const sidebar = document.getElementById("sidebar");
     sidebar?.appendChild(eq.htmlElement);
     eq.focus();
+    draw();
 });
 
 const homeBtn = document.getElementById('home');
 homeBtn?.addEventListener('click', returnHome);
 
 window.addEventListener('DOMContentLoaded', () => {
-    draw(null);
+    draw();
 })
 
 interface Response {
-    code: String,
+    code: string,
     num?: number,
 }
 
-const unlisten = await listen('edited', async event => {
+await listen('edited', async event => {
     const payload = <EditPayload> event.payload;
     const id = payload.id;
     const eq = expressions.get(id);
@@ -72,8 +73,9 @@ const unlisten = await listen('edited', async event => {
         } else {
             eq.hideSolutionBox();
 
+            eq.code = response.code;
             console.time();
-            await draw(response.code);
+            await draw();
             console.timeEnd();
         }
     } catch(error) {

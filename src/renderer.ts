@@ -10,9 +10,10 @@ const gl = canvas.getContext("webgl2", {premultipliedAlpha: false})!;
 const vtSource = "attribute vec4 a_position;    void main() { gl_Position = a_position; }";
 const vertexShader = createShader(gl, gl.VERTEX_SHADER, vtSource)!;
 
-export const draw = async (func: any) => {
+export const draw = async () => {
+    const evalCode = compileEvalFunction();
     const fsSource = await (await fetch('src/t_fragment.glsl')).text();
-    initShader(gl, fsSource);
+    initShader(gl, fsSource.replace('%eval%', evalCode));
     
     const positionLocation = gl.getAttribLocation(shaderProgram!, "a_position");
 
@@ -117,4 +118,24 @@ async function initShader(gl: WebGL2RenderingContext, fsSource: string) {
         console.error(`Unable to initialize the shader program: ${gl.getProgramInfoLog(shaderProgram)}`,);
         return null;
     }
+}
+
+function compileEvalFunction() {
+    const code = `int eval(ivec2 p, int opt) {
+        float x = float(p.x)*UNIT, y = float(p.y)*UNIT;
+        
+        %replace%
+
+        return 0;
+    }`
+    
+    const evals = Array.from(expressions, ([_k, v]) => v.code);
+    let evalsCode = "";
+    for(let i in evals) {
+        evalsCode += `if(opt == ${i}) {
+            ${evals[i]? evals[i] : "return 0;"}
+        } `;
+    }
+
+    return code.replace('%replace%', evalsCode);
 }

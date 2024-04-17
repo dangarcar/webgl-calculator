@@ -56,6 +56,7 @@ export class EquationBox {
     latexLength: number;
     solutionBox?: HTMLElement;
     undefVarsBar: UndefVariableBar;
+    code?: string;
 
     constructor(number: number, hue: number) {
         this.number = number;
@@ -152,7 +153,7 @@ export class EquationBox {
         }
     }
     
-    riteError(tooltip: any) {
+    writeError(tooltip: any) {
         const e = this.htmlElement.querySelector(".expr-button");        
         this.error = true;
 
@@ -162,7 +163,7 @@ export class EquationBox {
         e?.insertAdjacentHTML('beforeend', `<i class="fa-solid fa-triangle-exclamation ${
             this.visible? "error-box":"error-box-inverted"
         }" title="${tooltip}"></i>`);
-    }w
+    }
 
     /**
      * @throws An error if the function is named x, y or e
