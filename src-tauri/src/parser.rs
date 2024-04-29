@@ -3,46 +3,25 @@ use std::iter::Peekable;
 use crate::error::{self, AppError};
 use tex_parser::ast::Token;
 
-use self::{arithmetic::get_terms, ast::{BinaryOperation, Node, UnaryOperation}};
+use self::{arithmetic::get_terms, ast::Node, operations::{get_op_type, Constants, NAryOperation, OpType, UnaryOperation}};
 
 mod arithmetic;
 mod ast;
+mod operations;
 
 //This is used because the '^' is not a Punctuation symbol in the tex_parser library and I can't change it, so I use '!' which isn't used anywhere else in my program
 const EXP_SYMBOL: char = '?';
+const EXP_SYMBOL_STR: &str = "?";
 
-const BINARY_MACROS: [&str; 1] = ["frac"];
-const UNARY_MACROS: [&str; 15] = ["sin", "cos", "tan", "sec", "csc", "cosec", "cotan", "mod", "floor", "abs", "ceil", "log", "ln", "sqrt", "sum"];
-const CONSTANT_MACROS: [&str; 1] = ["pi"];
-const VARIABLE_MACROS: [&str; 4] = ["theta", "rho", "phi", "lambda"];
+pub fn parse_latex(eq: &str) -> error::Result<Node> {
+    let tokens = tokenize_string(eq)?;
 
+    let tree = build_tree(&tokens)?;
+    println!();
+    tree.print_tree();
 
-
-//This functions only gets the type of node and its name, it does not construct the tree
-/*fn macro_type(name: &str) -> error::Result<Node> {
-    if CONSTANT_MACROS.contains(&name) {        
-        Ok(Node::Constant { value:  match name {
-            "pi" => std::f64::consts::PI,
-            _ => std::f64::NAN,
-        }})
-    } else if VARIABLE_MACROS.contains(&name) {
-        Ok(Node::Variable { 
-            name: name.to_owned() 
-        })
-    } else if UNARY_MACROS.contains(&name) {
-        Ok(Node::Unary { 
-            name: name.to_owned(), 
-            child: None 
-        })
-    } else if BINARY_MACROS.contains(&name) {
-        Ok(Node::Binary { 
-            name: name.to_owned(), 
-            lhs: None, rhs: None 
-        })
-    } else {
-        Err(AppError::ParseError(format!("'{:?}' isn't a know command", name).to_owned()))
-    }
-}*/
+    Ok(tree)
+}
 
 fn build_tree(tokens: &[Token]) -> error::Result<Node> {
     //Get terms of equation
@@ -52,7 +31,7 @@ fn build_tree(tokens: &[Token]) -> error::Result<Node> {
     }
 
     //Get trees for each term
-    let term_trees: Vec<error::Result<Node>> = terms.into_iter().rev()
+    let term_trees: error::Result<Vec<Node>> = terms.into_iter().rev()
         .map(|t| {
             let term_tokens = &tokens[t.range];
             match build_term(term_tokens.iter()) {
@@ -67,94 +46,114 @@ fn build_tree(tokens: &[Token]) -> error::Result<Node> {
                 Err(e) => Err(e)
             }
         })
-        .map(|e| { println!("{:?} ", e); e })
         .collect();
+    let term_trees = term_trees?;
 
     if term_trees.len() == 1 {
-        term_trees.into_iter().nth(0).unwrap()
+        Ok(term_trees.into_iter().nth(0).unwrap())
     } else {
-        let mut last = term_trees[0].clone();
-        
-        for t in term_trees.into_iter().skip(1) {
-            last = Ok(Node::Binary { 
-                op_type: BinaryOperation::Add, 
-                lhs: Some(Box::new(last?)), 
-                rhs: Some(Box::new(t?))
-            });
-        }
-        
-        last
+        Ok(Node::NAry { 
+            op_type: NAryOperation::Add, 
+            children: term_trees.into_iter().map(|e| Box::new(e)).collect()
+        })
     }
 }
 
-//TODO: Not even remotely done
 fn build_term<'a, I: Iterator<Item = &'a Token>>(tokens: I) -> error::Result<Node> {
-    let mut s = String::new();
-    for t in tokens {
-        s += &format!("{t:?}, "); 
+    let mut factors = Vec::new();
+    let mut tokens = tokens.peekable();
+    loop {
+        let result = build_factor(tokens);
+        match result {
+            Ok((factor, tks)) => {
+                factors.push(Box::new(factor));
+                tokens = tks;
+            },
+            Err(e) => { 
+                if let AppError::EmptyError = e { break; } 
+                else { return Err(e); } 
+            }
+        }
     }
-    Ok(Node::Variable { name: s })
+
+    match factors.len() {
+        0 => Err(AppError::ParseError("This term is empty".to_owned())),
+        1 => Ok(*(factors.into_iter().next().unwrap())),
+        _ => Ok(Node::NAry { op_type: NAryOperation::Multiply, children: factors })
+    }
 }
 
-/*fn build_tree(tokens: &[Token]) -> error::Result<Node> {
-    let token = tokens.first()
-    
-    return match token {
+fn build_factor<'a, I: Iterator<Item = &'a Token>>(mut tokens: Peekable<I>) -> error::Result<(Node, Peekable<I>)> {
+    let token = tokens.next()
+        .ok_or(AppError::EmptyError)?;
+
+    let node = match token {
+        Token::Group(group) => build_tree(&group.tokens),
+        Token::Number(n) => Ok(Node::Constant { value: n.parse().map_err(|_| AppError::ParseError(format!("Couldn't parse number {}",n.content)))? }),
         Token::Macro(mac) => {
-            let macro_type = macro_type(&mac.name.content)?;
-            match macro_type {
-                Node::Variable{..} | Node::Constant {..} => Ok(macro_type),
-                Node::Unary { name,..} => {
-                    if let Some(Token::Group(group)) = tokens.iter().nth(1) {
-                        Ok(Node::Unary {
-                            name: name,
-                            child: Some(Box::new(build_tree(&group.tokens)?)),
-                        })
-                    } else {
-                        Err(AppError::MathError("A unary operator must have a child".to_owned()))
-                    }
-                },
-                Node::Binary { name,..} => {
-                    let lhs_group = tokens.iter().nth(1)
-                            .ok_or(AppError::MathError("A binary operator must have a left-hand side".to_owned()))?
-                            .group().ok_or(AppError::MathError("A binary operator must own a left-hand side".to_owned()))?;
-                    let rhs_group = tokens.iter().nth(2)
-                            .ok_or(AppError::MathError("A binary operator must have a right-hand side".to_owned()))?
-                            .group().ok_or(AppError::MathError("A binary operator must own a right-hand side".to_owned()))?;
-                    
+            match get_op_type(&mac.name.content)? {
+                OpType::Binary(op) => {
+                    let (lhs, tks) = build_factor(tokens)?;
+                    tokens = tks;
+                    let (rhs, tks) = build_factor(tokens)?;
+                    tokens = tks;
+
                     Ok(Node::Binary { 
-                        name: name, 
-                        lhs: Some(Box::new(build_tree(&lhs_group.tokens)?)), 
-                        rhs: Some(Box::new(build_tree(&rhs_group.tokens)?)),
+                        op_type: op, 
+                        lhs: Some(Box::new(lhs)), 
+                        rhs: Some(Box::new(rhs)) 
                     })
                 },
-                Node::Unknown {..} => unreachable!("There aren't macros for x or y"),
+                OpType::Unary(op) => {
+                    let (child, tks) = build_factor(tokens)?;
+                    tokens = tks;
+                    
+                    Ok(Node::Unary { 
+                        op_type: op, 
+                        child: Some(Box::new(child)) 
+                    })
+                },
+                OpType::Constant(cte) => Ok(Node::Constant { value: cte.value() }),
+                _ => Err(AppError::ParseError(format!("This doesn't make sense inside a factor: {}", mac.name.content))),
             }
         },
-        Token::Punctuation(punc) => {
-            todo!()
+        Token::CharTokens(tok) => {
+            if tok.content == "e" {
+                Ok(Node::Constant { value: Constants::E.value() })
+            } else if tok.content == "x" || tok.content == "y" {
+                Ok( Node::Unknown { name: tok.content.to_owned() } )
+            } else {
+                Ok( Node::Variable { name: tok.content.to_owned() } )
+            }
         },
-        Token::CharTokens(chars) => {
-            todo!()
-        },
-        Token::Group(group) => {
-            todo!()
-        },
-        t => Err(AppError::ParseError(format!("Unknown type of token {t:?}"))),
+        t => Err(AppError::ParseError(format!("This shouldn't be in a factor: {t:?}"))),
+    }?;
+
+    let next_node = if tokens.peek().is_some() && tokens.peek().unwrap().punctuation().is_some() {
+        let operation = tokens.next().unwrap().punctuation().unwrap();
+        let op_type = get_op_type(&operation.ch.to_string())?;
+        
+        match op_type {
+            OpType::Unary(unary) => Ok( Node::Unary { 
+                op_type: unary, 
+                child: Some(Box::new(node))
+            }),
+            OpType::Binary(bin) => {
+                let (rhs, tks) = build_factor(tokens)?;
+                tokens = tks;
+                Ok( Node::Binary { 
+                    op_type: bin, 
+                    lhs: Some(Box::new(node)), 
+                    rhs: Some(Box::new(rhs)) 
+                })
+            },
+            _ => Err(AppError::ParseError(format!("{op_type:?} isn't expected here in a factor after a symbol")))
+        }
+    } else {
+        Ok(node)
     };
-}*/
 
-pub fn parse_latex(eq: &str) -> error::Result<()> {
-    let tokens = tokenize_string(eq)?;
-
-    let tree = build_tree(&tokens)?;
-    tree.print_tree();
-
-    /*for i in &tokens {
-        println!("{i:?}");
-    }*/
-
-    Ok(())
+    Ok((next_node?, tokens))
 }
 
 fn tokenize_string(eq: &str) -> error::Result<Vec<Token>>{
@@ -163,12 +162,23 @@ fn tokenize_string(eq: &str) -> error::Result<Vec<Token>>{
     let latex_doc = tex_parser::parse(&eq)
             .map_err(|e| AppError::ParseError(e.to_string()))?;
 
-    let latex_doc: Vec<Token> = latex_doc.content.into_iter()
+    Ok( filter_token_stream(latex_doc.content) )
+}
+
+fn filter_token_stream(tokens: Vec<Token>) -> Vec<Token> {
+    let mut filtered: Vec<Token> = tokens.into_iter()
         .filter(|e| e.whitespace().is_none()) //Remove whitespaces
         .filter(|e| match e.macro_() { Some(m) => m.name.content != "cdot", None => true }) //Remove multiply symbols
         .collect();
+    
+    for v in filtered.iter_mut() {
+        if let Some(g) = v.group_mut() {
+            let t = g.tokens.clone();
+            g.tokens = filter_token_stream(t);
+        }
+    }
 
-    return Ok(latex_doc);
+    filtered
 }
 
 fn sanitize_string(mut eq: String) -> error::Result<String> {

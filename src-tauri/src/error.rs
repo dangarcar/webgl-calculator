@@ -8,6 +8,8 @@ pub enum AppError {
     ParseError(String),
     #[error("Couldn't resolve this math equation: {0}")]
     MathError(String),
+    #[error("Empty error, there's nothing there")]
+    EmptyError,
 }
 
 impl Serialize for AppError {

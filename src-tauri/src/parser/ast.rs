@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use tex_parser::ast::Token;
+use super::operations::{BinaryOperation, NAryOperation, UnaryOperation};
 
 #[derive(Debug, Clone)]
 pub enum Node {
@@ -21,33 +21,20 @@ pub enum Node {
         lhs: Option<Box<Node>>,
         rhs: Option<Box<Node>>,
     },
+    NAry {
+        op_type: NAryOperation,
+
+        children: Vec<Box<Node>>,
+    },
     Unknown {
         name: String
     },
-    Debug {
-        content: Vec<Token>
-    }
-}
-
-pub struct Ast {
-    root: Box<Node>,
-
-    evaluable: bool,
-}
-
-#[derive(Debug, Clone, Copy, Hash, PartialEq, PartialOrd, Ord, Eq)]
-pub enum BinaryOperation {
-    Add
-}
-
-#[derive(Debug, Clone, Copy, Hash, PartialEq, PartialOrd, Ord, Eq)]
-pub enum UnaryOperation {
-    Minus
 }
 
 impl Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Node::NAry { op_type,.. } => write!(f, "N-ary {{ {:?} }}", op_type),
             Node::Binary { op_type, .. } => write!(f, "Binary {{ {:?} }}", op_type),
             Node::Unary { op_type, .. } => write!(f, "Unary {{ {:?} }}", op_type),
             _ => write!(f, "{:?}", self)
@@ -80,6 +67,11 @@ fn print_tree(prefix: &str, root: &Node, last: bool) {
                 print_tree(&new_prefix, &r, true);
             }
         },
+        Node::NAry { children,.. } => {
+            for (i, n) in children.iter().enumerate() {
+                print_tree(&new_prefix, n, i==children.len()-1);
+            }
+        }
         _ => (),
     }
 }

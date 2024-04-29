@@ -5,9 +5,9 @@ mod error;
 mod parser;
 
 use std::sync::Mutex;
+use tauri::State;
 use std::str;
 use serde::{Deserialize, Serialize};
-use tauri::State;
 
 use crate::{error::AppError, parser::parse_latex};
 
