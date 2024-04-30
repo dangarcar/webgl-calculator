@@ -8,6 +8,9 @@ use self::{arithmetic::get_terms, ast::Node, operations::{get_op_type, Constants
 mod arithmetic;
 mod ast;
 mod operations;
+mod simplifier;
+
+pub use simplifier::simplify_tree;
 
 //This is used because the '^' is not a Punctuation symbol in the tex_parser library and I can't change it, so I use '!' which isn't used anywhere else in my program
 const EXP_SYMBOL: char = '?';
@@ -15,12 +18,7 @@ const EXP_SYMBOL_STR: &str = "?";
 
 pub fn parse_latex(eq: &str) -> error::Result<Node> {
     let tokens = tokenize_string(eq)?;
-
-    let tree = build_tree(&tokens)?;
-    println!();
-    tree.print_tree();
-
-    Ok(tree)
+    build_tree(&tokens)
 }
 
 fn build_tree(tokens: &[Token]) -> error::Result<Node> {

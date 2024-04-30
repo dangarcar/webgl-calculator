@@ -44,6 +44,7 @@ impl Display for Node {
 
 impl Node {
     pub fn print_tree(&self) {
+        println!("-Root");
         print_tree("", self, true);
     } 
 }

@@ -16,8 +16,15 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "1.0.58"
 tex-parser = "0.1.0"
+env_logger = "0.11.3"
+log = "0.4.21"
 # unlatex = "0.1.0"
 
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
+
+[env]
+RUST_LOG="debug cargo run --bin env_logger"
+MY_DEV_HOST="localhost"
+MY_PROD_HOST="prod.example.com"
