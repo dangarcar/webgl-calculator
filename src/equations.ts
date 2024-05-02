@@ -208,6 +208,8 @@ export class EquationBox {
         if(!this.solutionBox) 
             throw Error("No solution box");
         this.solutionBox.style.display = 'inline';
+        
+        if(n > 0 && n < 1e-6) n = 0;
         this.solutionBox.textContent = numeral(n).format('0[.][000000]');
     }
 

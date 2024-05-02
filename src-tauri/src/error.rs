@@ -10,6 +10,8 @@ pub enum AppError {
     MathError(String),
     #[error("Empty error, there's nothing there")]
     EmptyError,
+    #[error("{0}")]
+    IoError(String),
 }
 
 impl Serialize for AppError {

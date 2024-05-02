@@ -50,8 +50,7 @@ impl Node {
 }
 
 fn print_tree(prefix: &str, root: &Node, last: bool) {
-    print!("{prefix}{}", if last { "└──" } else { "├──" });
-    println!("{root}");
+    println!("{prefix}{}{root}", if last { "└──" } else { "├──" });
     
     let new_prefix = prefix.to_owned() + if last { "    " } else { "|   " };
     match root {

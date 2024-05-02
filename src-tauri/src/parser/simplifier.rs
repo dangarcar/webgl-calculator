@@ -1,12 +1,15 @@
+use std::collections::HashMap;
+
 use super::ast::Node;
 
-pub fn simplify_tree(root: &mut Node) -> Option<f64> {
+pub fn simplify_tree(root: &mut Node, variable_map: &HashMap<String, f64>) -> Option<f64> {
     match root {
         Node::Unknown {..} => None,
         Node::Constant {value} => Some(*value),
+        Node::Variable { name } => variable_map.get(name).copied(),
         Node::Unary { op_type, child } => {
             let child = child.as_mut().unwrap();
-            if let Some(n) = simplify_tree(child) {
+            if let Some(n) = simplify_tree(child, variable_map) {
                 let f = op_type.func().unwrap();
                 let val = f(n);
                 *root = Node::Constant { value: val };
@@ -14,8 +17,8 @@ pub fn simplify_tree(root: &mut Node) -> Option<f64> {
             } else { None }
         },
         Node::Binary { op_type, lhs, rhs } => {
-            let lhs = simplify_tree(lhs.as_mut().unwrap());
-            let rhs = simplify_tree(rhs.as_mut().unwrap());
+            let lhs = simplify_tree(lhs.as_mut().unwrap(), variable_map);
+            let rhs = simplify_tree(rhs.as_mut().unwrap(), variable_map);
             if lhs.is_some() && rhs.is_some() {
                 let f = op_type.func().unwrap();
                 let val = f(lhs.unwrap(), rhs.unwrap());
@@ -28,13 +31,13 @@ pub fn simplify_tree(root: &mut Node) -> Option<f64> {
         Node::NAry { op_type, children } => {
             let cnst = children
                 .iter_mut()
-                .filter_map(|e| simplify_tree(e))
+                .filter_map(|e| simplify_tree(e, variable_map))
                 .reduce(|acc, e| (op_type.func().unwrap())(acc, e));
             
             let mut new_children: Vec<Box<Node>> = children
                 .into_iter()
                 .filter_map(|e| { 
-                    match simplify_tree(e) {
+                    match simplify_tree(e, variable_map) {
                         Some(..) => None,
                         None => Some(e.to_owned()),
                     }
@@ -60,7 +63,5 @@ pub fn simplify_tree(root: &mut Node) -> Option<f64> {
                 None
             }            
         },
-
-        Node::Variable {..} => None,//TODO:
     }
 }

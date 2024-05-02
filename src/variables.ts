@@ -1,5 +1,6 @@
 "use strict"
 
+import { invoke } from "@tauri-apps/api";
 import { DEFAULT_MATH_CONFIG, expressions } from "./equations";
 import { functionSet } from "./functions";
 
@@ -105,6 +106,17 @@ export class VariableBox {
         }
         this.undefVarsBar.ofArray(undef);
     
+        try {
+            console.time('variable call');
+            await invoke('add_variable', { name: this.name, content: this.code });
+            expressions.forEach(e => e.refresh());
+            console.timeEnd('variable call');
+        } catch(error) {
+            console.warn(error);
+            this.writeError(error);
+            return;
+        }
+
         this.resetError();
     }
 
