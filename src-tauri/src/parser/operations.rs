@@ -11,7 +11,7 @@ pub enum NAryOperation {
 
 #[derive(Debug, Clone, Copy)]
 pub enum BinaryOperation {
-    Division, Power, Mod,
+    Division, Power, Mod, Equal
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -38,6 +38,7 @@ pub fn get_op_type(name: &str) -> error::Result<OpType> {
         "-" =>              Ok(OpType::Unary( UnaryOperation::Minus )),
         "!" =>              Ok(OpType::Unary( UnaryOperation::Fact )),
         EXP_SYMBOL_STR =>   Ok(OpType::Binary( BinaryOperation::Power )),
+        "=" =>              Ok(OpType::Binary( BinaryOperation::Equal )),
 
         "frac" =>           Ok(OpType::Binary( BinaryOperation::Division )),
         "mod" =>            Ok(OpType::Binary( BinaryOperation::Mod )), 
@@ -107,11 +108,16 @@ impl BinaryOperation {
         a / b
     }
     
+    pub fn sub(a: f64, b: f64) -> f64 {
+        a - b
+    }
+
     pub fn func(&self) -> error::Result<fn(f64,f64) -> f64> {
         match self {
             Self::Division => Ok(Self::div),
             Self::Mod => Ok(Self::fmod),
             Self::Power => Ok(f64::powf),
+            Self::Equal => Ok(Self::sub),
         }
     }
 }

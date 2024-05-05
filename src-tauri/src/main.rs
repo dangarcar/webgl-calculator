@@ -3,6 +3,7 @@
 
 mod error;
 mod parser;
+mod compiler;
 
 use std::{collections::HashMap, sync::Mutex};
 use log::{debug, info, warn};
@@ -10,7 +11,7 @@ use tauri::State;
 use std::str;
 use serde::{Deserialize, Serialize};
 
-use crate::{error::AppError, parser::{parse_latex, simplify_tree}};
+use crate::{compiler::compile_to_string, error::AppError, parser::{parse_latex, simplify_tree}};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Response {
@@ -44,10 +45,11 @@ fn process(eq: &str, state: State<GlobalState>) -> error::Result<Response> {
             num: numeric_value,
         } )   
     } else {
-        info!("Expression {eq} has been compiled to be shown");
+        let code = compile_to_string(&root, &vars)?;
+        info!("Expression {eq} has been compiled to {code}");
 
         Ok( Response {
-            code: String::from("return fneg(fsub(x*x, y));"),
+            code,
             num: None
         } )
     }

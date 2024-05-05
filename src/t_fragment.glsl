@@ -21,13 +21,11 @@ float fmul(float x, float y);
 float fdiv(float x, float y);
 float fmod(float x, float y);
 
-float fpow(float base, float ex);
-float flog(float x, float base);
 float flog(float x);
+float fln(float x);
 
 float fminus(float x);
 float fexp(float x);
-float fln(float x);
 float ffloor(float x);
 float fceil(float x);
 float fabs(float x);

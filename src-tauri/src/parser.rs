@@ -3,7 +3,7 @@ use std::iter::Peekable;
 use crate::error::{self, AppError};
 use tex_parser::ast::Token;
 
-use self::{arithmetic::get_terms, ast::Node, operations::{get_op_type, Constants, NAryOperation, OpType, UnaryOperation}};
+use self::{arithmetic::get_terms, operations::{get_op_type, Constants, OpType}};
 
 mod arithmetic;
 mod ast;
@@ -11,21 +11,38 @@ mod operations;
 mod simplifier;
 
 pub use simplifier::simplify_tree;
+pub use ast::Node;
+pub use operations::UnaryOperation;
+pub use operations::BinaryOperation;
+pub use operations::NAryOperation;
 
 //This is used because the '^' is not a Punctuation symbol in the tex_parser library and I can't change it, so I use '!' which isn't used anywhere else in my program
 const EXP_SYMBOL: char = '?';
 const EXP_SYMBOL_STR: &str = "?";
 
 pub fn parse_latex(eq: &str) -> error::Result<Node> {
-    let tokens = tokenize_string(eq)?;
-    build_tree(&tokens)
+    if eq.contains('=') {
+        let split: Vec<&str> = eq.split("=").collect();
+        if split.len() > 2 { 
+            return Err(AppError::MathError("There can't be more than one equal sign".to_owned()));
+        }
+
+        Ok(Node::Binary { 
+            op_type: BinaryOperation::Equal, 
+            lhs: Some(Box::new( parse_latex(split[0])? )), 
+            rhs: Some(Box::new( parse_latex(split[1])? )), 
+        })
+    } else {
+        let tokens = tokenize_string(eq)?;
+        build_tree(&tokens)
+    }
 }
 
 fn build_tree(tokens: &[Token]) -> error::Result<Node> {
     //Get terms of equation
     let terms = get_terms(tokens)?;
     if terms.len() == 0 {
-        return Err(AppError::MathError("Can't operate on nothing".to_owned()))
+        return Err(AppError::EmptyError)
     }
 
     //Get trees for each term
