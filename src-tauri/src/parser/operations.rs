@@ -11,7 +11,7 @@ pub enum NAryOperation {
 
 #[derive(Debug, Clone, Copy)]
 pub enum BinaryOperation {
-    Division, Power, Mod, Equal
+    Division, Power, Equal
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -41,7 +41,6 @@ pub fn get_op_type(name: &str) -> error::Result<OpType> {
         "=" =>              Ok(OpType::Binary( BinaryOperation::Equal )),
 
         "frac" =>           Ok(OpType::Binary( BinaryOperation::Division )),
-        "mod" =>            Ok(OpType::Binary( BinaryOperation::Mod )), 
         "pi" =>             Ok(OpType::Constant( Constants::Pi )),
         
         "sin" =>            Ok(OpType::Unary( UnaryOperation::Sin )), 
@@ -100,10 +99,6 @@ impl UnaryOperation {
 }
 
 impl BinaryOperation {
-    pub fn fmod(a: f64, b: f64) -> f64 {
-        a % b
-    }
-
     pub fn div(a: f64, b: f64) -> f64 {
         a / b
     }
@@ -115,7 +110,6 @@ impl BinaryOperation {
     pub fn func(&self) -> error::Result<fn(f64,f64) -> f64> {
         match self {
             Self::Division => Ok(Self::div),
-            Self::Mod => Ok(Self::fmod),
             Self::Power => Ok(f64::powf),
             Self::Equal => Ok(Self::sub),
         }
@@ -136,16 +130,5 @@ impl NAryOperation {
             Self::Add => Ok(Self::sum),
             Self::Multiply => Ok(Self::mult),
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::BinaryOperation;
-
-    #[test]
-    fn float_mod() {
-        let m = BinaryOperation::fmod(2.0, 1.5);
-        assert_eq!(m, 0.5);
     }
 }

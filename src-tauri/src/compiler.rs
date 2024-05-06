@@ -4,11 +4,21 @@ use log::info;
 
 use crate::{error::{self, AppError}, parser::{BinaryOperation, NAryOperation, Node, UnaryOperation}};
 
+struct CompileState <'a> {
+    variable_map: &'a HashMap<String, f64>,
+    denominators: Vec<String>,
+}
+
 pub fn compile_to_string(root: &Node, variable_map: &HashMap<String, f64>) -> error::Result<String> {
     let unknowns = ast_unknowns(root)?;
     if unknowns == (false, false) {
         return Err(AppError::MathError(format!("This equation doesn't have any unknowns")));
     }
+
+    let mut compile_state = CompileState {
+        variable_map,
+        denominators: Vec::new(),
+    };
 
     let code = if let Node::Binary{ op_type: BinaryOperation::Equal, lhs: Some(lhs), rhs: Some(rhs) } = root {
         info!("The equation has an equal sign");
@@ -18,12 +28,12 @@ pub fn compile_to_string(root: &Node, variable_map: &HashMap<String, f64>) -> er
             return Err(AppError::MathError(format!("This equation doesn't have y")));
         }
 
-        let compiled_lhs = compile(lhs, variable_map)?;
-        let compiled_rhs = compile(rhs, variable_map)?;
+        let compiled_lhs = compile(lhs, &mut compile_state)?;
+        let compiled_rhs = compile(rhs, &mut compile_state)?;
 
         format!("fsub({compiled_lhs}, {compiled_rhs})")
     } else {
-        let code = compile(root, variable_map)?;
+        let code = compile(root, &mut compile_state)?;
         
         if unknowns.0 == false {
             format!("fsub({code}, x)")
@@ -32,55 +42,56 @@ pub fn compile_to_string(root: &Node, variable_map: &HashMap<String, f64>) -> er
         }
     };
 
-    Ok(format!("return fneg({code});"))
+    handle_denominators(code, &compile_state.denominators)
 }
 
-fn compile(root: &Node, variable_map: &HashMap<String, f64>) -> error::Result<String> {
+fn compile(root: &Node, compile_state: &mut CompileState) -> error::Result<String> {
     match root {
         Node::Constant { value } => Ok(format!("float({value})")),
         Node::Variable { name } => {
-            let v = variable_map.get(name).ok_or(AppError::IoError(format!("There are no variable called {name}")))?;
+            let v = compile_state.variable_map.get(name).ok_or(AppError::IoError(format!("There are no variable called {name}")))?;
             Ok(format!("float({v})"))
         }
         Node::Unknown { name } => {
             Ok(name.clone()) 
-         }
+        }
         Node::Unary { op_type, child } => {
             let child = child.as_ref().ok_or(AppError::MathError(format!("There is nothing to operate on in {op_type:?}")))?;
-            let compiled_child = compile(&child, variable_map)?;
+            let compiled_child = compile(&child, compile_state)?;
 
             match op_type {
                 UnaryOperation::Minus => Ok(format!("fminus({compiled_child})")),
                 UnaryOperation::Sin => Ok(format!("fsin({compiled_child})")), 
                 UnaryOperation::Cos => Ok(format!("fcos({compiled_child})")), 
-                UnaryOperation::Tan => Ok(format!("fdiv( fsin({compiled_child}), fcos({compiled_child}))")), 
                 UnaryOperation::Floor => Ok(format!("ffloor({compiled_child})")), 
                 UnaryOperation::Abs => Ok(format!("fabs({compiled_child})")), 
                 UnaryOperation::Ceil => Ok(format!("fceil({compiled_child})")), 
                 UnaryOperation::Log => Ok(format!("flog({compiled_child})")), 
                 UnaryOperation::Ln => Ok(format!("fln({compiled_child})")), 
-                UnaryOperation::Sqrt => Ok(format!("fpow({compiled_child}, 0.5)")), 
+                
+                UnaryOperation::Tan => compile_div(format!("fsin({compiled_child})"), format!("fcos({compiled_child})"), compile_state), 
+                UnaryOperation::Sqrt => Ok(format!("fexp(fmul(fln({compiled_child}), 0.5))")), 
+                
                 UnaryOperation::Fact => Err(AppError::MathError("Factorial isn't implemented yet!".to_owned())),
             }
         },
         Node::Binary { op_type, lhs, rhs } => {
             let lhs = lhs.as_ref().ok_or(AppError::MathError(format!("There is nothing in the left to operate on in {op_type:?}")))?;
             let rhs = rhs.as_ref().ok_or(AppError::MathError(format!("There is nothing in the right to operate on in {op_type:?}")))?;
-            let compiled_lhs = compile(&lhs, variable_map)?;
-            let compiled_rhs = compile(rhs, variable_map)?;
+            let compiled_lhs = compile(&lhs, compile_state)?;
+            let compiled_rhs = compile(rhs, compile_state)?;
             
             match op_type {
-                BinaryOperation::Division => Ok(format!("fdiv({compiled_lhs}, {compiled_rhs})")),
+                BinaryOperation::Division => compile_div(compiled_lhs, compiled_rhs, compile_state),
                 BinaryOperation::Power => {
                     if let Node::Constant { value } = **rhs {
-                        if value.fract() < EPSILON {
-                            return Ok(compile_pow(&compiled_lhs, value as i32));
+                        if f64::abs(value.fract()) < EPSILON {
+                            compile_pow_integer(&compiled_lhs, value as i32, compile_state)?;
                         }
                     }
 
                     Ok(format!("fexp(fmul(fln({compiled_lhs}), {compiled_rhs}))"))
                 }
-                BinaryOperation::Mod => Ok(format!("fmod({compiled_lhs}, {compiled_rhs})")),
                 BinaryOperation::Equal => Err(AppError::MathError("Equal is not an operation in this context".to_owned())),
             }
         }
@@ -93,10 +104,10 @@ fn compile(root: &Node, variable_map: &HashMap<String, f64>) -> error::Result<St
             if children.len() < 2 { 
                 Err(AppError::MathError(format!("A {op_type:?} cannot be of less than two terms"))) 
             } else {
-                let mut code = format!("{op}({}, {})", compile(&children[0], variable_map)?, compile(&children[1], variable_map)?);
+                let mut code = format!("{op}({}, {})", compile(&children[0], compile_state)?, compile(&children[1], compile_state)?);
 
                 for t in children.iter().skip(2) {
-                    code = format!("{op}({code}, {})", compile(t, variable_map)?);
+                    code = format!("{op}({code}, {})", compile(t, compile_state)?);
                 }
 
                 Ok(code)
@@ -105,17 +116,26 @@ fn compile(root: &Node, variable_map: &HashMap<String, f64>) -> error::Result<St
     }
 }
 
-fn compile_pow(code: &str, times: i32) -> String {
+fn compile_div(num: String, den: String, compile_state: &mut CompileState) -> error::Result<String> {
+    compile_state.denominators.push(den);
+    Ok(format!("fdiv( {num}, var_{} )", compile_state.denominators.len()-1))
+}
+
+fn compile_pow_integer(code: &str, times: i32, compile_state: &mut CompileState) -> error::Result<String> {
     if times == 0 {
-        format!("1.0")
+        Ok(format!("1.0"))
     } else if times < 0 {
-        format!("fdiv(1.0, {})", compile_pow(code, -times))
+        Ok(compile_div(
+            "1.0".to_owned(), 
+            compile_pow_integer(code, i32::abs(times), compile_state)?, 
+            compile_state
+        )?)
     } else if times == 1 {
-        format!("{code}")
+        Ok(format!("{code}"))
     } else if times == 2 {
-        format!("fmul({code}, {code})")
+        Ok(format!("fmul({code}, {code})"))
     } else {
-        format!("fmul({code}, {})", compile_pow(code, times-1))
+        Ok(format!("fmul({code}, {})", compile_pow_integer(code, times-1, compile_state)?))
     }
 }
 
@@ -157,4 +177,22 @@ fn ast_unknowns(root: &Node) -> error::Result<(bool, bool)> {
         }
         _ => Ok((false, false))
     }
+}
+
+fn handle_denominators(code: String, denominators: &Vec<String>) -> error::Result<String> {
+    if denominators.len() > 32 {
+        return Err(AppError::IoError(format!("A function can't have more than 32 denominators")));
+    }
+    
+    let init = String::from("int den = 0;");
+
+    let dens = denominators.iter().enumerate().fold(init, |s, (i, e)| {
+        s + &format!("
+            float var_{i} = {e};
+            den <<= 1; 
+            den |= fneg(var_{i});")
+    });
+
+    Ok(format!("{dens}
+            return ivec2(fneg({code}), den);"))
 }

@@ -19,7 +19,7 @@ export interface EditPayload {
 }
 
 export const EDIT_EMIT_CODE: string = 'edited';
-const AUTO_FUNCTIONS = 'sin cos tan sec csc cosec cotan mod floor abs ceil log ln';
+const AUTO_FUNCTIONS = 'sin cos tan sec csc cosec cotan floor abs ceil log ln';
 const AUTO_COMMANDS = 'pi theta sqrt sum rho phi lambda';
 
 export const DEFAULT_MATH_CONFIG = {

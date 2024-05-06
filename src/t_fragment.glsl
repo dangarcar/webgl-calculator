@@ -1,3 +1,5 @@
+#version 300 es
+
 #define TEO_WIDTH 1.0
 #define AA 4
 #define SIDE %side%
@@ -11,8 +13,6 @@ uniform int squareMant, squareExp, squareSize;
 uniform int maxExpr;
 uniform vec4 expressions[MAX_EXPR];
 
-float PIXEL = (float(squareMant) * pow(10.0, float(squareExp))) / float(squareSize); 
-float UNIT = PIXEL/float(AA);
 const int WIDTH = int(TEO_WIDTH*float(AA)); 
 
 float fadd(float x, float y);
@@ -34,29 +34,21 @@ int fneg(float x);
 float fsin(float x);
 float fcos(float x);
 
-int eval(ivec2 p, int opt);
-
-/*int eval(ivec2 p, int opt) {
-    float x = float(p.x)*UNIT, y = float(p.y)*UNIT;
-
-    if(opt == 0)
-        return fneg(fsub(x, y));
-    else
-        return fneg(fsub((x-float(opt))*(x-float(opt)), y));
-
-    return 0;
-}*/
+ivec2 eval(ivec2 p, int opt);
 
 //To change dinamically the eval function
 %eval%
 
 bool line(ivec2 p, int opt) {
-    int g = eval(p + ivec2(-WIDTH, -WIDTH), opt)
-          + eval(p + ivec2(WIDTH+1, WIDTH+1), opt)
-          + eval(p + ivec2(-WIDTH, WIDTH+1), opt)
-          + eval(p + ivec2(WIDTH+1, -WIDTH), opt);
+    ivec2 a = eval(p + ivec2(-WIDTH, -WIDTH), opt);
+    ivec2 b = eval(p + ivec2(WIDTH+1, WIDTH+1), opt);
+    ivec2 c = eval(p + ivec2(-WIDTH, WIDTH+1), opt);
+    ivec2 d = eval(p + ivec2(WIDTH+1, -WIDTH), opt);
 
-    return 0 < g && g < 4;
+    int g = a.x + b.x + c.x + d.x;
+    bool denominators = a.y == b.y && b.y == c.y && c.y == d.y;
+
+    return 0 < g && g < 4 && denominators;
 }
 
 vec4 lineColor(ivec2 p, int opt, vec3 rgb) {
@@ -83,6 +75,8 @@ vec4 blend(vec4 a, vec4 b) {
     );
 }
 
+out vec4 fragColor;
+
 void main() {
     ivec2 p = ivec2(
         int(gl_FragCoord.x) - origin.x, 
@@ -98,7 +92,7 @@ void main() {
         color = blend(color, lineColor(p, i, rgbColor));
     }
 
-    gl_FragColor = color;
+    fragColor = color;
 }
 
 const float PI = 3.141592653589793115997963468544185161590576171875;

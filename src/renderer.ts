@@ -7,11 +7,14 @@ let shaderProgram: WebGLProgram | null;
 const canvas = <HTMLCanvasElement> document.getElementById("calculator")!;
 const gl = canvas.getContext("webgl2", {premultipliedAlpha: false})!;
 
-const vtSource = "attribute vec4 a_position;    void main() { gl_Position = a_position; }";
+const vtSource = `#version 300 es
+in vec4 a_position;
+void main() { gl_Position = a_position; }`;
 const vertexShader = createShader(gl, gl.VERTEX_SHADER, vtSource)!;
 
 export const draw = async () => {
     const evalCode = compileEvalFunction();
+    console.log(evalCode);
     const fsSource = await (await fetch('src/t_fragment.glsl')).text();
     initShader(gl, fsSource.replace('%eval%', evalCode));
     
@@ -121,19 +124,21 @@ async function initShader(gl: WebGL2RenderingContext, fsSource: string) {
 }
 
 function compileEvalFunction() {
-    const code = `int eval(ivec2 p, int opt) {
-        float x = float(p.x)*UNIT, y = float(p.y)*UNIT;
-        
+    const code = `
+    ivec2 eval(ivec2 p, int opt) {
+        float pixel = (float(squareMant) * pow(10.0, float(squareExp))) / float(squareSize); 
+        float unit = pixel/float(AA);
+        float x = float(p.x)*unit, y = float(p.y)*unit;
         %replace%
 
-        return 0;
+        return ivec2(0, 0);
     }`
     
     const evals = Array.from(expressions, ([_k, v]) => v.code);
     let evalsCode = "";
     for(let i in evals) {
         evalsCode += `if(opt == ${i}) {
-            ${evals[i]? evals[i] : "return 0;"}
+            ${evals[i]? evals[i] : "return ivec2(0, 0);"}
         } `;
     }
 
