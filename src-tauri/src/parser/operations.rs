@@ -14,9 +14,9 @@ pub enum BinaryOperation {
     Division, Power, Equal
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum UnaryOperation {
-    Minus, Sin, Cos, Tan, Floor, Abs, Ceil, Log, Ln, Sqrt, Fact,
+    Minus, Sin, Cos, Tan, Floor, Abs, Ceil, Log, Ln, Sqrt, Fact
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]

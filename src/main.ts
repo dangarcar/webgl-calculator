@@ -1,10 +1,9 @@
 import { returnHome } from "./background";
-import { EditAction, EditPayload, EquationBox, expressions } from "./equations";
+import { CHANGED_EMIT_CODE, EditAction, EditPayload, EquationBox, expressions } from "./equations";
 import { listen } from "@tauri-apps/api/event";
 import { draw } from "./renderer";
 import { invoke } from "@tauri-apps/api";
-import { variableBoxes } from "./variables";
-import { functionSet } from "./functions";
+import { addFunction, functionSet } from "./functions";
 
 const moreBtn = document.getElementById("more");
 moreBtn?.addEventListener("click", () => {
@@ -22,12 +21,12 @@ window.addEventListener('DOMContentLoaded', () => {
     draw();
 })
 
-interface Response {
+export interface Response {
     code: string,
     num?: number,
 }
 
-await listen('edited', async event => {
+await listen(CHANGED_EMIT_CODE, async event => {
     const payload = <EditPayload> event.payload;
     const id = payload.id;
     const eq = expressions.get(id);
@@ -42,14 +41,23 @@ await listen('edited', async event => {
     let variables: Set<string>;
     let fnName: string | null;
     try {
-        variables = eq?.getVariables();
         fnName = eq.functionCharacter(); 
+        variables = eq?.getVariables();
 
         if(fnName) {
-            functionSet.add(fnName);
-            
-            if([...variables].some(e => functionSet.has(e)))
+            if(functionSet.has(fnName) && functionSet.get(fnName) !== id)
+                throw Error("There's already a function with this name");
+
+            if([...variables].some(e => e == fnName))
                 throw Error("A variable can't be called like a function");
+            
+            variables.delete(fnName);
+            eq.showUndefinedVariables(variables)
+
+            functionSet.set(fnName, id);
+            addFunction(fnName, latex, eq, payload.action);
+            eq.toggleError();
+            return;
         }
     } catch (error) {
         console.warn(error);
@@ -57,10 +65,8 @@ await listen('edited', async event => {
         return;
     }
 
-    const undefinedVariables = [...variables].filter(e => !variableBoxes.has(e))
-        .filter(e => !"xye".includes(e));
-    eq.showUndefinedVariables(undefinedVariables);
-    if(undefinedVariables.length > 0) {
+    
+    if(eq.showUndefinedVariables(variables) > 0) {
         eq.toggleError();
         return;
     }
@@ -79,9 +85,11 @@ await listen('edited', async event => {
             console.timeEnd();
         }
     } catch(error) {
-        console.warn(error);
-        eq.writeError(error);
-        return;
+        if(!(<string> error).startsWith("Empty error")) {
+            console.warn(error);
+            eq.writeError(error);
+            return;
+        }
     }
 
     eq.toggleError();

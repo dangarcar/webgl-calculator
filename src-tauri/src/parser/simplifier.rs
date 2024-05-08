@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::error;
+
 use super::ast::Node;
 
 pub fn simplify_tree(root: &mut Node, variable_map: &HashMap<String, f64>) -> Option<f64> {
@@ -64,4 +66,34 @@ pub fn simplify_tree(root: &mut Node, variable_map: &HashMap<String, f64>) -> Op
             }            
         },
     }
+}
+
+/// Substitute the unknowns of the tree by the variable
+pub fn substitute_func(root: &mut Node, variable: &Node) -> error::Result<()> {
+    match root {
+        Node::Unknown { .. } => {
+            *root = variable.clone();
+        }
+        Node::Unary { child, .. } => {
+            if let Some(c) = child {
+                substitute_func(c, variable)?;
+            }
+        },
+        Node::Binary { lhs, rhs, .. } => {
+            if let Some(l) = lhs {
+                substitute_func(l, variable)?;
+            }
+            if let Some(r) = rhs {
+                substitute_func(r, variable)?;
+            }
+        },
+        Node::NAry { children,.. } => {
+            for n in children.iter_mut() {
+                substitute_func(n, variable)?;
+            }
+        }
+        _ => (),
+    }
+
+    Ok(())
 }

@@ -3,6 +3,7 @@
 import { emit } from "@tauri-apps/api/event";
 import numeral from "numeral";
 import { UndefVariableBar, variableBoxes } from "./variables";
+import { functionSet } from "./functions";
 
 //@ts-ignore this is a ide error, because of old JQuery library
 const MQ = MathQuill.getInterface(2);
@@ -10,7 +11,7 @@ const MQ = MathQuill.getInterface(2);
 export const expressions : Map<number, EquationBox> = new Map();
 
 export enum EditAction {
-    ADD, DELETE, REFRESH
+    ADD, REMOVE, REFRESH
 }
 export interface EditPayload {
     latex: string,
@@ -18,7 +19,7 @@ export interface EditPayload {
     action: EditAction,
 }
 
-export const EDIT_EMIT_CODE: string = 'edited';
+export const CHANGED_EMIT_CODE: string = 'changed';
 const AUTO_FUNCTIONS = 'sin cos tan sec csc cosec cotan floor abs ceil log ln';
 const AUTO_COMMANDS = 'pi theta sqrt sum rho phi lambda';
 
@@ -53,7 +54,7 @@ export class EquationBox {
     error = false;
     htmlElement: HTMLElement;
     mathField?: any;
-    latexLength: number;
+    oldLatex: string;
     solutionBox?: HTMLElement;
     undefVarsBar: UndefVariableBar;
     code?: string;
@@ -61,7 +62,7 @@ export class EquationBox {
     constructor(number: number, hue: number) {
         this.number = number;
         this.color = `hsl(${hue} 69% 69%)`;
-        this.latexLength = 0;
+        this.oldLatex = '';
         this.undefVarsBar = new UndefVariableBar([]);
         
         this.htmlElement = this.#createEqBox();
@@ -119,18 +120,20 @@ export class EquationBox {
     }
     
     refresh = async () => {
-        const old = this.latexLength;
-        const len = this.mathField.latex().length;
+        const latex = this.mathField.latex();
+        
+        let actionType;
+        if(this.oldLatex.length < latex.length) 
+            actionType = EditAction.ADD;
+        else if(this.oldLatex == latex) 
+            actionType = EditAction.REFRESH;
+        else 
+            actionType = EditAction.REMOVE;
 
-        let actionType: EditAction;
-        if(len == old) actionType = EditAction.REFRESH;
-        else if(len > old) actionType = EditAction.ADD;
-        else actionType = EditAction.REFRESH; 
+        this.oldLatex = latex;
 
-        this.latexLength = len;
-
-        await emit(EDIT_EMIT_CODE, <EditPayload> {
-            latex: this.mathField.latex(),
+        await emit(CHANGED_EMIT_CODE, <EditPayload> {
+            latex: latex,
             id: this.number,
             action: actionType,
         })
@@ -188,7 +191,8 @@ export class EquationBox {
         const vars = Array.from(this.htmlElement.getElementsByTagName('var'))
                 .filter(e => !e.classList.contains('mq-operator-name'))
                 .map(e => e.textContent)
-                .flatMap(e => e? e:[]);
+                .flatMap(e => e? e:[])
+                .filter(e => !functionSet.has(e));
         
         if(fnName)
             vars.splice(0, 1);
@@ -219,7 +223,11 @@ export class EquationBox {
         this.solutionBox.style.display = 'none';
     }
 
-    showUndefinedVariables(undefVars: string[]) {
-        this.undefVarsBar.ofArray(undefVars);
+    //Returns the number of undefined variables
+    showUndefinedVariables(variables: Set<string>): number {
+        const undefinedVariables = [...variables].filter(e => !variableBoxes.has(e))
+            .filter(e => !"xye".includes(e));
+        this.undefVarsBar.ofArray(undefinedVariables);
+        return undefinedVariables.length;
     }
 }

@@ -1,9 +1,9 @@
-use std::iter::Peekable;
+use std::{collections::HashMap, iter::Peekable};
 
 use crate::error::{self, AppError};
-use tex_parser::ast::Token;
+use tex_parser::ast::{CharTokens, Pos, Token};
 
-use self::{arithmetic::get_terms, operations::{get_op_type, Constants, OpType}};
+use self::{arithmetic::get_terms, operations::{get_op_type, Constants, OpType}, simplifier::substitute_func};
 
 mod arithmetic;
 mod ast;
@@ -20,7 +20,7 @@ pub use operations::NAryOperation;
 const EXP_SYMBOL: char = '?';
 const EXP_SYMBOL_STR: &str = "?";
 
-pub fn parse_latex(eq: &str) -> error::Result<Node> {
+pub fn parse_latex(eq: &str, func_map: &HashMap<String, Box<Node>>) -> error::Result<Node> {
     if eq.contains('=') {
         let split: Vec<&str> = eq.split("=").collect();
         if split.len() > 2 { 
@@ -29,16 +29,16 @@ pub fn parse_latex(eq: &str) -> error::Result<Node> {
 
         Ok(Node::Binary { 
             op_type: BinaryOperation::Equal, 
-            lhs: Some(Box::new( parse_latex(split[0])? )), 
-            rhs: Some(Box::new( parse_latex(split[1])? )), 
+            lhs: Some(Box::new( parse_latex(split[0], func_map)? )), 
+            rhs: Some(Box::new( parse_latex(split[1], func_map)? )), 
         })
     } else {
         let tokens = tokenize_string(eq)?;
-        build_tree(&tokens)
+        build_tree(&tokens, func_map)
     }
 }
 
-fn build_tree(tokens: &[Token]) -> error::Result<Node> {
+fn build_tree(tokens: &[Token], func_map: &HashMap<String, Box<Node>>) -> error::Result<Node> {
     //Get terms of equation
     let terms = get_terms(tokens)?;
     if terms.len() == 0 {
@@ -49,7 +49,7 @@ fn build_tree(tokens: &[Token]) -> error::Result<Node> {
     let term_trees: error::Result<Vec<Node>> = terms.into_iter().rev()
         .map(|t| {
             let term_tokens = &tokens[t.range];
-            match build_term(term_tokens.iter()) {
+            match build_term(term_tokens.iter(), func_map) {
                 Ok(term_tree) => {
                     if t.subtract { Ok(Node::Unary {
                         op_type: UnaryOperation::Minus,
@@ -74,11 +74,11 @@ fn build_tree(tokens: &[Token]) -> error::Result<Node> {
     }
 }
 
-fn build_term<'a, I: Iterator<Item = &'a Token>>(tokens: I) -> error::Result<Node> {
+fn build_term<'a, I: Iterator<Item = &'a Token>>(tokens: I, func_map: &HashMap<String, Box<Node>>) -> error::Result<Node> {
     let mut factors = Vec::new();
     let mut tokens = tokens.peekable();
     loop {
-        let result = build_factor(tokens);
+        let result = build_factor(tokens, func_map);
         match result {
             Ok((factor, tks)) => {
                 factors.push(Box::new(factor));
@@ -92,25 +92,25 @@ fn build_term<'a, I: Iterator<Item = &'a Token>>(tokens: I) -> error::Result<Nod
     }
 
     match factors.len() {
-        0 => Err(AppError::ParseError("This term is empty".to_owned())),
+        0 => Err(AppError::EmptyError),
         1 => Ok(*(factors.into_iter().next().unwrap())),
         _ => Ok(Node::NAry { op_type: NAryOperation::Multiply, children: factors })
     }
 }
 
-fn build_factor<'a, I: Iterator<Item = &'a Token>>(mut tokens: Peekable<I>) -> error::Result<(Node, Peekable<I>)> {
+fn build_factor<'a, I: Iterator<Item = &'a Token>>(mut tokens: Peekable<I>, func_map: &HashMap<String, Box<Node>>) -> error::Result<(Node, Peekable<I>)> {
     let token = tokens.next()
         .ok_or(AppError::EmptyError)?;
 
     let node = match token {
-        Token::Group(group) => build_tree(&group.tokens),
+        Token::Group(group) => build_tree(&group.tokens, func_map),
         Token::Number(n) => Ok(Node::Constant { value: n.parse().map_err(|_| AppError::ParseError(format!("Couldn't parse number {}",n.content)))? }),
         Token::Macro(mac) => {
             match get_op_type(&mac.name.content)? {
                 OpType::Binary(op) => {
-                    let (lhs, tks) = build_factor(tokens)?;
+                    let (lhs, tks) = build_factor(tokens, func_map)?;
                     tokens = tks;
-                    let (rhs, tks) = build_factor(tokens)?;
+                    let (rhs, tks) = build_factor(tokens, func_map)?;
                     tokens = tks;
 
                     Ok(Node::Binary { 
@@ -120,7 +120,7 @@ fn build_factor<'a, I: Iterator<Item = &'a Token>>(mut tokens: Peekable<I>) -> e
                     })
                 },
                 OpType::Unary(op) => {
-                    let (child, tks) = build_factor(tokens)?;
+                    let (child, tks) = build_factor(tokens, func_map)?;
                     tokens = tks;
                     
                     Ok(Node::Unary { 
@@ -137,6 +137,15 @@ fn build_factor<'a, I: Iterator<Item = &'a Token>>(mut tokens: Peekable<I>) -> e
                 Ok(Node::Constant { value: Constants::E.value() })
             } else if tok.content == "x" || tok.content == "y" {
                 Ok( Node::Unknown { name: tok.content.to_owned() } )
+            } else if func_map.contains_key(&tok.content) {
+                let (child, tks) = build_factor(tokens, func_map)?;
+                tokens = tks;
+
+                let f = func_map.get(&tok.content)
+                    .ok_or_else(|| AppError::IoError(format!("The aren't any functions called {}", tok.content)))?;
+                let mut f = f.as_ref().clone();
+                substitute_func(&mut f, &child)?;
+                Ok( f )
             } else {
                 Ok( Node::Variable { name: tok.content.to_owned() } )
             }
@@ -154,7 +163,7 @@ fn build_factor<'a, I: Iterator<Item = &'a Token>>(mut tokens: Peekable<I>) -> e
                 child: Some(Box::new(node))
             }),
             OpType::Binary(bin) => {
-                let (rhs, tks) = build_factor(tokens)?;
+                let (rhs, tks) = build_factor(tokens, func_map)?;
                 tokens = tks;
                 Ok( Node::Binary { 
                     op_type: bin, 
@@ -177,7 +186,22 @@ fn tokenize_string(eq: &str) -> error::Result<Vec<Token>>{
     let latex_doc = tex_parser::parse(&eq)
             .map_err(|e| AppError::ParseError(e.to_string()))?;
 
-    Ok( filter_token_stream(latex_doc.content) )
+    let filtered_stream = filter_token_stream(latex_doc.content);
+    let split_stream = filtered_stream.into_iter()
+        .fold(Vec::new(), |mut v, e| {
+            match e.char_tokens() {
+                Some(CharTokens{content, ..}) => {
+                    for c in content.chars() {
+                        v.push(Token::CharTokens(CharTokens {content: c.to_string(), pos: Pos{byte_index: 0}}));
+                    }
+                }
+                None => v.push(e)
+            }
+
+            v
+        });
+
+    Ok( split_stream )
 }
 
 fn filter_token_stream(tokens: Vec<Token>) -> Vec<Token> {

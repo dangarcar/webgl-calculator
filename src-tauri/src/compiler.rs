@@ -85,8 +85,8 @@ fn compile(root: &Node, compile_state: &mut CompileState) -> error::Result<Strin
                 BinaryOperation::Division => compile_div(compiled_lhs, compiled_rhs, compile_state),
                 BinaryOperation::Power => {
                     if let Node::Constant { value } = **rhs {
-                        if f64::abs(value.fract()) < EPSILON {
-                            compile_pow_integer(&compiled_lhs, value as i32, compile_state)?;
+                        if f64::abs((value as i32) as f64 - value) < EPSILON {
+                            return compile_pow_integer(&compiled_lhs, value as i32, compile_state);
                         }
                     }
 
@@ -139,7 +139,7 @@ fn compile_pow_integer(code: &str, times: i32, compile_state: &mut CompileState)
     }
 }
 
-fn ast_unknowns(root: &Node) -> error::Result<(bool, bool)> {
+pub fn ast_unknowns(root: &Node) -> error::Result<(bool, bool)> {
     match root {
         Node::Unknown { name } => {
             if name == "x" { Ok((true, false)) }

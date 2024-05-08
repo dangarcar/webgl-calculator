@@ -14,7 +14,6 @@ const vertexShader = createShader(gl, gl.VERTEX_SHADER, vtSource)!;
 
 export const draw = async () => {
     const evalCode = compileEvalFunction();
-    console.log(evalCode);
     const fsSource = await (await fetch('src/t_fragment.glsl')).text();
     initShader(gl, fsSource.replace('%eval%', evalCode));
     
