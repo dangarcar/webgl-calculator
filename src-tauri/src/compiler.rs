@@ -22,11 +22,6 @@ pub fn compile_to_string(root: &Node, variable_map: &HashMap<String, f64>) -> er
 
     let code = if let Node::Binary{ op_type: BinaryOperation::Equal, lhs: Some(lhs), rhs: Some(rhs) } = root {
         info!("The equation has an equal sign");
-        if unknowns.0 == false {
-            return Err(AppError::MathError(format!("This equation doesn't have x")));
-        } else if unknowns.1 == false {
-            return Err(AppError::MathError(format!("This equation doesn't have y")));
-        }
 
         let compiled_lhs = compile(lhs, &mut compile_state)?;
         let compiled_rhs = compile(rhs, &mut compile_state)?;

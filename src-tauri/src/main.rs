@@ -53,7 +53,7 @@ fn process(eq: &str, state: State<GlobalState>) -> error::Result<Response> {
 }
 
 #[tauri::command]
-fn add_variable(name: &str, content: &str, state: State<GlobalState>) -> error::Result<()> {
+fn add_variable(name: &str, content: &str, state: State<GlobalState>) -> error::Result<f64> {
     let funcs = state.functions.lock()
         .map_err(|_| AppError::IoError("Couldn't access to the function map".to_owned()))?;
     let mut vars = state.variables.lock()
@@ -71,7 +71,7 @@ fn add_variable(name: &str, content: &str, state: State<GlobalState>) -> error::
     
     vars.insert(name.to_owned(), val);
 
-    Ok(())
+    Ok(val)
 }
 
 #[tauri::command]

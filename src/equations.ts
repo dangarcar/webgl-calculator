@@ -2,13 +2,14 @@
 
 import { emit } from "@tauri-apps/api/event";
 import numeral from "numeral";
-import { UndefVariableBar, variableBoxes } from "./variables";
-import { functionSet } from "./functions";
+import { UndefVariableBar } from "./variables";
 
 //@ts-ignore this is a ide error, because of old JQuery library
 const MQ = MathQuill.getInterface(2);
 
 export const expressions : Map<number, EquationBox> = new Map();
+export const functionSet: Map<string, number> = new Map();
+export const variableSet: Map<string, number> = new Map();
 
 export enum EditAction {
     ADD, REMOVE, REFRESH
@@ -20,6 +21,7 @@ export interface EditPayload {
 }
 
 export const CHANGED_EMIT_CODE: string = 'changed';
+
 const AUTO_FUNCTIONS = 'sin cos tan sec csc cosec cotan floor abs ceil log ln';
 const AUTO_COMMANDS = 'pi theta sqrt sum rho phi lambda';
 
@@ -47,9 +49,9 @@ export class EquationBox {
         return eq;
     }
     
-    
     number: number;
     color: string;
+    drawable = false;
     visible = true;
     error = false;
     htmlElement: HTMLElement;
@@ -79,13 +81,6 @@ export class EquationBox {
         const btn = document.createElement('div');
         btn.className = 'expr-button';
         btn.id = 'expr-button-' + this.number;
-        btn.style.background = this.color;
-        btn.style.boxShadow = '0px 0px 5px 3px ' + this.color;
-        btn.addEventListener('click', () => {
-            this.visible = !this.visible;
-            btn.style.background = this.visible? this.color : '#1d1d1d';
-            this.toggleError();
-        });
         container.append(btn);
     
         const span = document.createElement('span');
@@ -180,13 +175,33 @@ export class EquationBox {
         const name = fn[0][0];
         if("xye".includes(name))
             throw Error(`A function can't be named ${name}, it's a reserved character`);
-        if(variableBoxes.has(name))
+        if(variableSet.has(name))
             throw Error(`There is already a variable with that name: ${name}`);
+        return name;
+    }
+
+    /**
+     * @throws An error if the variable is named e
+     * @returns The character of the name of the variable or null otherwise
+     */
+    variableCharacter(): string | null {
+        const v = this.mathField.latex().match('[A-Za-z]=');
+        if(!v) 
+            return null;
+
+        const name = v[0][0];
+        if('xy'.includes(name)) 
+            return null;
+        if(name == 'e')
+            throw Error("A variable can't be named e"); 
+        if(functionSet.has(name))
+            throw Error(`There's already a function with that name ${name}`);
         return name;
     }
 
     getVariables() {
         const fnName = this.functionCharacter();
+        const varName = this.variableCharacter();
 
         const vars = Array.from(this.htmlElement.getElementsByTagName('var'))
                 .filter(e => !e.classList.contains('mq-operator-name'))
@@ -194,7 +209,7 @@ export class EquationBox {
                 .flatMap(e => e? e:[])
                 .filter(e => !functionSet.has(e));
         
-        if(fnName)
+        if(fnName || varName)
             vars.splice(0, 1);
 
         return new Set(vars);
@@ -225,9 +240,30 @@ export class EquationBox {
 
     //Returns the number of undefined variables
     showUndefinedVariables(variables: Set<string>): number {
-        const undefinedVariables = [...variables].filter(e => !variableBoxes.has(e))
+        const undefinedVariables = [...variables].filter(e => !variableSet.has(e))
             .filter(e => !"xye".includes(e));
         this.undefVarsBar.ofArray(undefinedVariables);
         return undefinedVariables.length;
+    }
+
+    setDrawable(drawable: boolean) {
+        const btn = <HTMLDivElement> this.htmlElement.querySelector('.expr-button')!;
+
+        if(drawable) {
+            btn.style.background = this.color;
+            btn.style.boxShadow = '0px 0px 5px 3px ' + this.color;
+            btn.addEventListener('click', () => {
+                this.visible = !this.visible;
+                btn.style.background = this.visible? this.color : '#1d1d1d';
+                this.toggleError();
+            });
+        } else {
+            this.visible = false;
+            btn.onclick = () => {};
+            btn.style.background = 'transparent';
+            btn.style.boxShadow = 'none';
+        }
+
+        this.drawable = drawable;
     }
 }

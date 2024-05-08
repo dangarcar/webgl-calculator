@@ -52,7 +52,7 @@ pub fn get_op_type(name: &str) -> error::Result<OpType> {
         "log" =>            Ok(OpType::Unary( UnaryOperation::Log )),
         "ln" =>             Ok(OpType::Unary( UnaryOperation::Ln )), 
         "sqrt" =>           Ok(OpType::Unary( UnaryOperation::Sqrt )),
-        "theta"|"rho"|"phi"|"lambda" => Err(error::AppError::ParseError("The greek letters aren't implemented yet".to_owned())), //TODO: implement variables
+        "theta"|"rho"|"phi"|"lambda" => Err(error::AppError::ParseError("The greek letters aren't implemented yet".to_owned())),
         _ => Err(error::AppError::ParseError(format!("{name} is not a known operation")))
     }
 }

@@ -1,9 +1,8 @@
 import { returnHome } from "./background";
-import { CHANGED_EMIT_CODE, EditAction, EditPayload, EquationBox, expressions } from "./equations";
+import { CHANGED_EMIT_CODE, EditAction, EditPayload, EquationBox, expressions, functionSet, variableSet } from "./equations";
 import { listen } from "@tauri-apps/api/event";
 import { draw } from "./renderer";
 import { invoke } from "@tauri-apps/api";
-import { addFunction, functionSet } from "./functions";
 
 const moreBtn = document.getElementById("more");
 moreBtn?.addEventListener("click", () => {
@@ -39,10 +38,31 @@ await listen(CHANGED_EMIT_CODE, async event => {
         eq.writeFunctionBrackets();
 
     let variables: Set<string>;
-    let fnName: string | null;
     try {
-        fnName = eq.functionCharacter(); 
-        variables = eq?.getVariables();
+        const varName = eq.variableCharacter();
+        const fnName = eq.functionCharacter(); 
+        variables = eq.getVariables();
+
+        if(eq.showUndefinedVariables(variables) > 0) {
+            eq.toggleError();
+            return;
+        }
+
+        if(varName) {
+            eq.hideSolutionBox();
+            if(variableSet.has(varName) && variableSet.get(varName) !== id)
+                throw Error("There's already a function with this name");
+
+            eq.setDrawable(false);
+
+            variableSet.set(varName, id);
+            const val = await addVariable(varName, eq, latex.substring(2), payload.action);
+            eq.setSolutionValue(val!);
+            eq.toggleError();
+            return;
+        } else {
+            eq.setDrawable(true);
+        }
 
         if(fnName) {
             if(functionSet.has(fnName) && functionSet.get(fnName) !== id)
@@ -55,19 +75,13 @@ await listen(CHANGED_EMIT_CODE, async event => {
             eq.showUndefinedVariables(variables)
 
             functionSet.set(fnName, id);
-            addFunction(fnName, latex, eq, payload.action);
+            await addFunction(fnName, latex, eq, payload.action);
             eq.toggleError();
             return;
         }
     } catch (error) {
         console.warn(error);
         eq.writeError(error);
-        return;
-    }
-
-    
-    if(eq.showUndefinedVariables(variables) > 0) {
-        eq.toggleError();
         return;
     }
 
@@ -94,3 +108,47 @@ await listen(CHANGED_EMIT_CODE, async event => {
 
     eq.toggleError();
 });
+
+const addFunction = async (fnName: string, latex: string, eq: EquationBox, action: EditAction) => {
+    const code = latex.substring(latex.indexOf('=')+1);
+    const unknown = Math.min(latex.indexOf('x')>0? latex.indexOf('x'):1e9, latex.indexOf('y')>0? latex.indexOf('y'):1e9);
+
+    try {
+        fnName += latex[unknown]!;
+        const response = <Response> await invoke('add_function', { name: fnName, content: code });
+
+        if(action != EditAction.REFRESH)
+            for(let id of expressions.keys())
+                if(id != eq.number)
+                    expressions.get(id)?.refresh();
+
+        eq.code = response.code;
+        await draw();
+    } catch(error) {
+        if(!(<string> error).startsWith("Empty error")) {
+            console.warn(error);
+            eq.writeError(error);
+            return;
+        }
+    }
+}
+
+const addVariable = async (varName: string, eq: EquationBox, latex: string, action: EditAction) => {
+    const vars = eq.getVariables();
+    if(vars.has('x') || vars.has('y')) {
+        eq.writeError(new Error("A variable can't have x nor y because it has to be constant"));
+        return;
+    }
+    
+    try {
+        const val = <number> await invoke('add_variable', { name: varName, content: latex });
+        if(action != EditAction.REFRESH)
+            expressions.forEach(e => e.refresh());
+        
+        return val;
+    } catch(error) {
+        console.warn(error);
+        eq.writeError(error);
+        return;
+    }
+}
