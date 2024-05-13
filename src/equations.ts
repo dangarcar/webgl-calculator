@@ -3,8 +3,9 @@
 import { emit } from "@tauri-apps/api/event";
 import numeral from "numeral";
 import { UndefVariableBar } from "./variables";
+import { deleteFunction, deleteVariable } from "./main";
 
-//@ts-ignore this is a ide error, because of old JQuery library
+//@ts-ignore this is a IDE error, because of it being an old JQuery library
 const MQ = MathQuill.getInterface(2);
 
 export const expressions : Map<number, EquationBox> = new Map();
@@ -91,10 +92,7 @@ export class EquationBox {
         const close = document.createElement('button');
         close.insertAdjacentHTML('beforeend', '<span><i class="fa-solid fa-xmark"></i></span>');
         close.className = 'close-button';
-        close.addEventListener('click', () => {
-            this.htmlElement.remove();
-            expressions.delete(this.number);
-        });
+        close.addEventListener('click', this.close);
         container.append(close);
     
         this.htmlElement.append(container);
@@ -114,6 +112,24 @@ export class EquationBox {
         return this.htmlElement;
     }
     
+    close = async () => {
+        const f = this.functionCharacter();
+        const v = this.variableCharacter();
+
+        if(f) {
+            deleteFunction(f, this);
+            functionSet.delete(f);
+        }
+
+        if(v) {
+            deleteVariable(v, this);
+            variableSet.delete(v);
+        }
+
+        this.htmlElement.remove();
+        expressions.delete(this.number);
+    }
+
     refresh = async () => {
         const latex = this.mathField.latex();
         
@@ -238,7 +254,9 @@ export class EquationBox {
         this.solutionBox.style.display = 'none';
     }
 
-    //Returns the number of undefined variables
+    /**
+     * @returns The number of undefined variables
+     */
     showUndefinedVariables(variables: Set<string>): number {
         const undefinedVariables = [...variables].filter(e => !variableSet.has(e))
             .filter(e => !"xye".includes(e));

@@ -47,6 +47,51 @@ impl Node {
         println!("-Root");
         print_tree("", self, true);
     } 
+
+    pub fn add(a: Node, b: Node) -> Self {
+        Self::NAry { 
+            op_type: NAryOperation::Add, 
+            children: vec![
+                Box::new(a),
+                Box::new(b),
+            ] 
+        }
+    }
+
+    pub fn multiply(a: Node, b: Node) -> Self {
+        Self::NAry { 
+            op_type: NAryOperation::Multiply, 
+            children: vec![
+                Box::new(a),
+                Box::new(b),
+            ] 
+        }
+    }
+
+    pub fn divide(a: Node, b: Node) -> Self {
+        Self::Binary { 
+            op_type: BinaryOperation::Division, 
+            lhs: Some(Box::new(a)), 
+            rhs: Some(Box::new(b)) 
+        }
+    }
+
+    pub fn op(op_type: UnaryOperation, a: Node) -> Self {
+        Self::Unary { 
+            op_type, 
+            child: Some(Box::new(a)),
+        }
+    }
+
+    pub fn substract(a: Node, b: Node) -> Self {
+        Self::NAry { 
+            op_type: NAryOperation::Add, 
+            children: vec![
+                Box::new(a),
+                Box::new(Node::Unary { op_type: UnaryOperation::Minus, child: Some(Box::new(b)) }),
+            ] 
+        }
+    }
 }
 
 fn print_tree(prefix: &str, root: &Node, last: bool) {

@@ -64,8 +64,10 @@ fn add_variable(name: &str, content: &str, state: State<GlobalState>) -> error::
         warn!("{e:?}"); Err(e) 
     })?;
     
+    simplify_tree(&mut root, &vars); //Somehow if I don't apply the effect 2 times the simplifier fails in some cases
     let val = simplify_tree(&mut root, &vars).ok_or_else(|| {
         warn!("The variable {name} couldn't be evaluated to a value: {content}");
+        root.print_tree();
         AppError::MathError(format!("The variable must evaluate to a certain value"))
     })?;
     
@@ -110,7 +112,27 @@ fn add_function(name: &str, content: &str, state: State<GlobalState>) -> error::
 
     funcs.insert(fn_name.to_string(), Box::new(root));
 
+    println!("{vars:?} {funcs:?}");
+
     response
+}
+
+#[tauri::command]
+fn delete_function(name: &str, state: State<GlobalState>) -> error::Result<()> {
+    let mut funcs = state.functions.lock()
+        .map_err(|_| AppError::IoError("Couldn't access to the function map".to_owned()))?;
+    funcs.remove(&name.to_string());
+
+    Ok(())
+}
+
+#[tauri::command]
+fn delete_variable(name: &str, state: State<GlobalState>) -> error::Result<()> {
+    let mut vars = state.variables.lock()
+        .map_err(|_| AppError::IoError("Couldn't access to the variable map".to_owned()))?;
+    vars.remove(&name.to_string());
+
+    Ok(())
 }
 
 fn process_ast(root: &mut Node, variable_map: &HashMap<String, f64>) -> error::Result<Response> {
@@ -140,7 +162,7 @@ fn main() {
 
     tauri::Builder::default()
         .manage(GlobalState::default() )
-        .invoke_handler(tauri::generate_handler![process, add_variable, add_function])
+        .invoke_handler(tauri::generate_handler![process, add_variable, add_function, delete_function, delete_variable])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

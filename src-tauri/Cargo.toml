@@ -23,8 +23,3 @@ log = "0.4.21"
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
-
-[env]
-RUST_LOG="debug cargo run --bin env_logger"
-MY_DEV_HOST="localhost"
-MY_PROD_HOST="prod.example.com"

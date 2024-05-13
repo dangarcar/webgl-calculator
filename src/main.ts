@@ -5,10 +5,23 @@ import { draw } from "./renderer";
 import { invoke } from "@tauri-apps/api";
 
 const moreBtn = document.getElementById("more");
+const sidebar = document.getElementById("sidebar");
 moreBtn?.addEventListener("click", () => {
     const eq = EquationBox.createNew();
-    const sidebar = document.getElementById("sidebar");
     sidebar?.appendChild(eq.htmlElement);
+    
+    eq.htmlElement.addEventListener('keydown', e => {
+        if(e.key == "ArrowUp") {
+            const i = [...expressions.keys()].indexOf(eq.number) - 1;
+            if(i >= 0) 
+                [...expressions.values()][i]?.focus();
+        } else if(e.key == "ArrowDown") {
+            const i = [...expressions.keys()].indexOf(eq.number) + 1;
+            if(i < expressions.size) 
+                [...expressions.values()][i]?.focus();
+        }
+    });
+    
     eq.focus();
     draw();
 });
@@ -32,7 +45,8 @@ await listen(CHANGED_EMIT_CODE, async event => {
     const latex = payload.latex;
 
     if(!eq) throw Error("There isn't any equations to edit");
-    eq.error = false; //Supose there aren't any errors right now, we'll discover them later
+    //Suppose there aren't any errors right now, we'll discover them later
+    eq.error = false;
 
     if(payload.action == EditAction.ADD)
         eq.writeFunctionBrackets();
@@ -90,14 +104,17 @@ await listen(CHANGED_EMIT_CODE, async event => {
 
         if(response.num !== null && response.num !== undefined) {
             eq.setSolutionValue(response.num);
+            
+            eq.code = "return ivec2(0,0);";
         } else {
             eq.hideSolutionBox();
 
             eq.code = response.code;
-            console.time();
-            await draw();
-            console.timeEnd();
         }
+
+        console.time();
+        await draw();
+        console.timeEnd();
     } catch(error) {
         if(!(<string> error).startsWith("Empty error")) {
             console.warn(error);
@@ -109,7 +126,7 @@ await listen(CHANGED_EMIT_CODE, async event => {
     eq.toggleError();
 });
 
-const addFunction = async (fnName: string, latex: string, eq: EquationBox, action: EditAction) => {
+export const addFunction = async (fnName: string, latex: string, eq: EquationBox, action: EditAction) => {
     const code = latex.substring(latex.indexOf('=')+1);
     const unknown = Math.min(latex.indexOf('x')>0? latex.indexOf('x'):1e9, latex.indexOf('y')>0? latex.indexOf('y'):1e9);
 
@@ -133,7 +150,18 @@ const addFunction = async (fnName: string, latex: string, eq: EquationBox, actio
     }
 }
 
-const addVariable = async (varName: string, eq: EquationBox, latex: string, action: EditAction) => {
+export const deleteFunction = async (fnName: string, eq: EquationBox) => {
+    try {
+        await invoke('delete_function', { name: fnName });
+        expressions.forEach(e => e.refresh());
+
+    } catch (error) {
+        console.warn(error);
+        eq.writeError(error);
+    }
+}
+
+export const addVariable = async (varName: string, eq: EquationBox, latex: string, action: EditAction) => {
     const vars = eq.getVariables();
     if(vars.has('x') || vars.has('y')) {
         eq.writeError(new Error("A variable can't have x nor y because it has to be constant"));
@@ -149,6 +177,16 @@ const addVariable = async (varName: string, eq: EquationBox, latex: string, acti
     } catch(error) {
         console.warn(error);
         eq.writeError(error);
-        return;
+    }
+}
+
+export const deleteVariable = async (varName: string, eq: EquationBox) => {
+    try {
+        await invoke('delete_variable', { name: varName });
+        expressions.forEach(e => e.refresh());
+
+    } catch (error) {
+        console.warn(error);
+        eq.writeError(error);
     }
 }

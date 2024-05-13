@@ -50,7 +50,7 @@ export const draw = async () => {
 
         if(!shaderProgram) throw Error("There is no webgl shader program");
 
-        // Set location to my variables
+        // Give location to my variables
         const originLocation = gl.getUniformLocation(shaderProgram, 'origin');
         gl.uniform2i(originLocation, backState.x, backState.y);
         

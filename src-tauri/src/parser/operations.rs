@@ -4,7 +4,7 @@ use crate::error;
 
 use super::EXP_SYMBOL_STR;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum NAryOperation {
     Add, Multiply
 }

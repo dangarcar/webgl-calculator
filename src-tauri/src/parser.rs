@@ -3,7 +3,7 @@ use std::{collections::HashMap, iter::Peekable};
 use crate::error::{self, AppError};
 use tex_parser::ast::{CharTokens, Pos, Token};
 
-use self::{arithmetic::get_terms, operations::{get_op_type, Constants, OpType}, simplifier::substitute_func};
+use self::{arithmetic::get_terms, operations::{get_op_type, Constants, OpType}, simplifier::{derive_function, substitute_func}};
 
 mod arithmetic;
 mod ast;
@@ -34,6 +34,9 @@ pub fn parse_latex(eq: &str, func_map: &HashMap<String, Box<Node>>) -> error::Re
         })
     } else {
         let tokens = tokenize_string(eq)?;
+        tokens.iter().for_each(|e| print!("{e:?} "));
+        println!();
+
         build_tree(&tokens, func_map)
     }
 }
@@ -138,14 +141,28 @@ fn build_factor<'a, I: Iterator<Item = &'a Token>>(mut tokens: Peekable<I>, func
             } else if tok.content == "x" || tok.content == "y" {
                 Ok( Node::Unknown { name: tok.content.to_owned() } )
             } else if func_map.contains_key(&tok.content) {
+                let mut derivate_level = 0;
+                while let Some(Token::CharTokens(CharTokens { content,.. })) = tokens.peek() {
+                    if content == "'" {
+                        derivate_level = derivate_level+1;
+                        tokens.next();
+                    }
+                }
+
                 let (child, tks) = build_factor(tokens, func_map)?;
                 tokens = tks;
 
-                let f = func_map.get(&tok.content)
-                    .ok_or_else(|| AppError::IoError(format!("The aren't any functions called {}", tok.content)))?;
-                let mut f = f.as_ref().clone();
+                let mut f = func_map.get(&tok.content)
+                    .ok_or_else(|| AppError::IoError(format!("The aren't any functions called {}", tok.content)))?
+                    .to_owned();
+                
+                for _ in 0..derivate_level {
+                    f = derive_function(&f)?;
+                }
+
                 substitute_func(&mut f, &child)?;
-                Ok( f )
+                
+                Ok( *f )
             } else {
                 Ok( Node::Variable { name: tok.content.to_owned() } )
             }
