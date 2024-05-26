@@ -8,44 +8,48 @@ const canvas = <HTMLCanvasElement> document.getElementById("calculator")!;
 const gl = canvas.getContext("webgl2", {premultipliedAlpha: false})!;
 
 const vtSource = `#version 300 es
-in vec4 a_position;
-void main() { gl_Position = a_position; }`;
+    in vec4 a_position;
+    void main() { gl_Position = a_position; }`;
 const vertexShader = createShader(gl, gl.VERTEX_SHADER, vtSource)!;
 
-export const draw = async () => {
-    const evalCode = compileEvalFunction();
-    const fsSource = await (await fetch('src/t_fragment.glsl')).text();
-    initShader(gl, fsSource.replace('%eval%', evalCode));
-    
-    const positionLocation = gl.getAttribLocation(shaderProgram!, "a_position");
+export const draw = () => {
+    updateCanvas = true;
+}
 
-    const positionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.bufferData(
-        gl.ARRAY_BUFFER,
-        new Float32Array([
-            -1.0, -1.0,
-            1.0, -1.0,
-            -1.0, 1.0,
-            -1.0, 1.0,
-            1.0, -1.0,
-            1.0, 1.0]),
-        gl.STATIC_DRAW
-    );
+let updateCanvas = true;
+startRendering();
+
+async function startRendering() {
+    const fsSource = await (await fetch('src/t_fragment.glsl')).text();
+
+    let positionLocation: number;
+    let positionBuffer: WebGLBuffer;
+    await updateDraw();
 
     let oldTime = performance.now();
     let frames = 0;
-    (function render() {
-        printFPS();
+    (async function render() {
+        if(updateCanvas) {
+            console.time("update");
+            await updateDraw();
+            console.timeEnd("update");
+
+            updateCanvas = false;
+        }
 
         window.requestAnimationFrame(render);
+        printFPS();
+        
         gl.clearColor(1.0, 1.0, 0.0, 1.0);
         gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
         gl.clear(gl.COLOR_BUFFER_BIT);
 
         // Setup the positions for the vertex shader
+        //@ts-ignore
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        //@ts-ignore
         gl.enableVertexAttribArray(positionLocation);
+        //@ts-ignore
         gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
         if(!shaderProgram) throw Error("There is no webgl shader program");
@@ -71,10 +75,33 @@ export const draw = async () => {
         if(express.length > 0)
             gl.uniform4fv(expressionsLocation, express.flat(1));
 
+
         gl.drawArrays(gl.TRIANGLES, 0, 6);
 
         drawBack();
     })();
+
+    async function updateDraw() {
+        const evalCode = compileEvalFunction();
+        console.log(evalCode) //FIXME:
+        initShader(gl, fsSource.replace('%replace%', evalCode));
+            
+        positionLocation = gl.getAttribLocation(shaderProgram!, "a_position");
+
+        positionBuffer = gl.createBuffer()!;
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.bufferData(
+            gl.ARRAY_BUFFER,
+            new Float32Array([
+                -1.0, -1.0,
+                1.0, -1.0,
+                -1.0, 1.0,
+                -1.0, 1.0,
+                1.0, -1.0,
+                1.0, 1.0]),
+            gl.STATIC_DRAW
+        );
+    }
 
     function printFPS() {
         let t = performance.now();
@@ -122,24 +149,13 @@ async function initShader(gl: WebGL2RenderingContext, fsSource: string) {
     }
 }
 
-function compileEvalFunction() {
-    const code = `
-    ivec2 eval(ivec2 p, int opt) {
-        float pixel = (float(squareMant) * pow(10.0, float(squareExp))) / float(squareSize); 
-        float unit = pixel/float(AA);
-        float x = float(p.x)*unit, y = float(p.y)*unit;
-        %replace%
-
-        return ivec2(0, 0);
-    }`
-    
+function compileEvalFunction() {    
     const evals = Array.from(expressions, ([_k, v]) => v.code);
-    let evalsCode = "";
+    let code = "";
     for(let i in evals) {
-        evalsCode += `if(opt == ${i}) {
-            ${evals[i]? evals[i] : "return ivec2(0, 0);"}
-        } `;
+        if(evals[i])
+            code += evals[i] + '\n';
     }
 
-    return code.replace('%replace%', evalsCode);
+    return code;
 }

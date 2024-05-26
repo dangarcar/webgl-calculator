@@ -7,9 +7,10 @@ use crate::{error::{self, AppError}, parser::{BinaryOperation, NAryOperation, No
 struct CompileState <'a> {
     variable_map: &'a HashMap<String, f64>,
     denominators: Vec<String>,
+    expr_idx: usize,
 }
 
-pub fn compile_to_string(root: &Node, variable_map: &HashMap<String, f64>) -> error::Result<String> {
+pub fn compile_to_string(root: &Node, variable_map: &HashMap<String, f64>, expr_idx: usize) -> error::Result<String> {
     let unknowns = ast_unknowns(root)?;
     if unknowns == (false, false) {
         return Err(AppError::MathError(format!("This equation doesn't have any unknowns")));
@@ -18,6 +19,7 @@ pub fn compile_to_string(root: &Node, variable_map: &HashMap<String, f64>) -> er
     let mut compile_state = CompileState {
         variable_map,
         denominators: Vec::new(),
+        expr_idx
     };
 
     let code = if let Node::Binary{ op_type: BinaryOperation::Equal, lhs: Some(lhs), rhs: Some(rhs) } = root {
@@ -37,7 +39,7 @@ pub fn compile_to_string(root: &Node, variable_map: &HashMap<String, f64>) -> er
         }
     };
 
-    handle_denominators(code, &compile_state.denominators)
+    handle_denominators(code, &compile_state.denominators, expr_idx)
 }
 
 fn compile(root: &Node, compile_state: &mut CompileState) -> error::Result<String> {
@@ -113,7 +115,7 @@ fn compile(root: &Node, compile_state: &mut CompileState) -> error::Result<Strin
 
 fn compile_div(num: String, den: String, compile_state: &mut CompileState) -> error::Result<String> {
     compile_state.denominators.push(den);
-    Ok(format!("fdiv( {num}, var_{} )", compile_state.denominators.len()-1))
+    Ok(format!("fdiv( {num}, var_{}_{} )", compile_state.expr_idx, compile_state.denominators.len()-1))
 }
 
 fn compile_pow_integer(code: &str, times: i32, compile_state: &mut CompileState) -> error::Result<String> {
@@ -123,7 +125,7 @@ fn compile_pow_integer(code: &str, times: i32, compile_state: &mut CompileState)
         Ok(compile_div(
             "1.0".to_owned(), 
             compile_pow_integer(code, i32::abs(times), compile_state)?, 
-            compile_state
+            compile_state,
         )?)
     } else if times == 1 {
         Ok(format!("{code}"))
@@ -174,20 +176,18 @@ pub fn ast_unknowns(root: &Node) -> error::Result<(bool, bool)> {
     }
 }
 
-fn handle_denominators(code: String, denominators: &Vec<String>) -> error::Result<String> {
+fn handle_denominators(code: String, denominators: &Vec<String>, expr_idx: usize) -> error::Result<String> {
     if denominators.len() > 32 {
         return Err(AppError::IoError(format!("A function can't have more than 32 denominators")));
     }
-    
-    let init = String::from("int den = 0;");
 
-    let dens = denominators.iter().enumerate().fold(init, |s, (i, e)| {
+    let dens = denominators.iter().enumerate().fold(String::new(), |s, (i, e)| {
         s + &format!("
-            float var_{i} = {e};
-            den <<= 1; 
-            den |= fneg(var_{i});")
+            float var_{expr_idx}_{i} = {e};
+            ret.dens[{expr_idx}] <<= 1; 
+            ret.dens[{expr_idx}] |= int(fneg(var_{expr_idx}_{i}));")
     });
 
     Ok(format!("{dens}
-            return ivec2(fneg({code}), den);"))
+            ret.negs[{expr_idx}] = fneg({code});"))
 }

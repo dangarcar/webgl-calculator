@@ -27,7 +27,7 @@ pub struct GlobalState {
 }
 
 #[tauri::command]
-fn process(eq: &str, state: State<GlobalState>) -> error::Result<Response> {
+fn process(eq: &str, state: State<GlobalState>, expr_idx: usize) -> error::Result<Response> {
     info!("{eq}");
 
     let funcs = state.functions.lock()
@@ -40,7 +40,7 @@ fn process(eq: &str, state: State<GlobalState>) -> error::Result<Response> {
     })?;
     root.print_tree();
 
-    match process_ast(&mut root, &vars)? {
+    match process_ast(&mut root, &vars, expr_idx)? {
         Response { code, num: Some(n) } =>  {
             info!("Expression {eq} evaluates to {n}");
             Ok(Response { code, num: Some(n) })
@@ -77,7 +77,7 @@ fn add_variable(name: &str, content: &str, state: State<GlobalState>) -> error::
 }
 
 #[tauri::command]
-fn add_function(name: &str, content: &str, state: State<GlobalState>) -> error::Result<Response> {
+fn add_function(name: &str, content: &str, state: State<GlobalState>, expr_idx: usize) -> error::Result<Response> {
     let vars = state.variables.lock()
         .map_err(|_| AppError::IoError("Couldn't access to the variable map".to_owned()))?;
 
@@ -99,7 +99,7 @@ fn add_function(name: &str, content: &str, state: State<GlobalState>) -> error::
         return Err(AppError::ParseError(format!("The function {fn_name} does not match its unknowns")));
     }
 
-    let response = match process_ast(&mut root, &vars)? {
+    let response = match process_ast(&mut root, &vars, expr_idx)? {
         Response { code, num: Some(n) } =>  {
             info!("Expression {content} evaluates to {n}");
             Ok(Response { code, num: Some(n) })
@@ -135,7 +135,7 @@ fn delete_variable(name: &str, state: State<GlobalState>) -> error::Result<()> {
     Ok(())
 }
 
-fn process_ast(root: &mut Node, variable_map: &HashMap<String, f64>) -> error::Result<Response> {
+fn process_ast(root: &mut Node, variable_map: &HashMap<String, f64>, expr_idx: usize) -> error::Result<Response> {
     let numeric_value = simplify_tree(root, variable_map);
     root.print_tree();
 
@@ -145,7 +145,7 @@ fn process_ast(root: &mut Node, variable_map: &HashMap<String, f64>) -> error::R
             num: numeric_value,
         } )   
     } else {
-        let code = compile_to_string(&root, variable_map)?;
+        let code = compile_to_string(&root, variable_map, expr_idx)?;
 
         Ok( Response {
             code,

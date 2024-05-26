@@ -1,9 +1,11 @@
 #version 300 es
 
+//#define SHADER_TEST
+
 #define TEO_WIDTH 1.0
-#define AA 4
+#define AA 2
 #define SIDE %side%
-#define MAX_EXPR 256
+#define MAX_EXPR 32
 
 precision highp float;
 precision highp int;
@@ -37,41 +39,55 @@ float fexp(float x);
 float ffloor(float x);
 float fceil(float x);
 float fabs(float x);
-int fneg(float x);
+bool fneg(float x);
 
 float fsin(float x);
 float fcos(float x);
 
-ivec2 eval(ivec2 p, int opt);
+struct evalColors {
+    bool negs[MAX_EXPR];
+    int dens[MAX_EXPR];
+};
 
-//To change dinamically the eval function
-%eval%
+evalColors eval(ivec2 p) {
+    float pixel = (float(squareMant) * pow(10.0, float(squareExp))) / float(squareSize); 
+    float unit = pixel/float(AA);
+    float x = float(p.x)*unit, y = float(p.y)*unit;
 
-bool line(ivec2 p, int opt) {
-    ivec2 a = eval(p + ivec2(-WIDTH, -WIDTH), opt);
-    ivec2 b = eval(p + ivec2(WIDTH+1, WIDTH+1), opt);
-    ivec2 c = eval(p + ivec2(-WIDTH, WIDTH+1), opt);
-    ivec2 d = eval(p + ivec2(WIDTH+1, -WIDTH), opt);
-
-    int g = a.x + b.x + c.x + d.x;
-    bool denominators = a.y == b.y && b.y == c.y && c.y == d.y;
-
-    return 0 < g && g < 4 && denominators;
-}
-
-vec4 lineColor(ivec2 p, int opt, vec3 rgb) {
-    int count = 0;
-    for(int i=0; i<AA; ++i) {
-        for(int j=0; j<AA; ++j) {
-            ivec2 np = p + ivec2(i, j);
-            count += int(line(np, opt));
-        }
+    evalColors ret;
+    for(int i=0; i<maxExpr; ++i) {
+        ret.negs[i] = false;
+        ret.dens[i] = 0;
     }
 
-    float alpha = float(count)/float(AA*AA);
-    return vec4(rgb*alpha, alpha);
+#ifdef SHADER_TEST
+    ret.negs[0] = fneg(fsub(x, y));
+    ret.negs[1] = fneg(fsub(fsin(x), y));
+    ret.negs[2] = fneg(fsub(fmul(x, x), y));
+#else
+    %replace%
+#endif
+
+    return ret;
 }
 
+bool[MAX_EXPR] line(ivec2 p) {
+    bool ret[MAX_EXPR];
+
+    evalColors a = eval(p + ivec2(-WIDTH, -WIDTH));
+    evalColors b = eval(p + ivec2(WIDTH+1, WIDTH+1));
+    evalColors c = eval(p + ivec2(-WIDTH, WIDTH+1));
+    evalColors d = eval(p + ivec2(WIDTH+1, -WIDTH));
+
+    for(int i=0; i<maxExpr; ++i) {
+        int g = int(a.negs[i]) + int(b.negs[i]) + int(c.negs[i]) + int(d.negs[i]);
+        bool denominators = a.dens[i] == b.dens[i] && b.dens[i] == c.dens[i] && c.dens[i] == d.dens[i];
+
+        ret[i] = 0 < g && g < 4 && denominators;
+    }
+
+    return ret;
+}
 
 vec4 blend(vec4 a, vec4 b) {
     float p = a.a, q = 1.0-p;
@@ -92,12 +108,28 @@ void main() {
     ) * AA;
     vec4 color = vec4(0.0, 0.0, 0.0, 0.0);
 
-    for(int i=0; i<MAX_EXPR; i++) {
-        if(i >= maxExpr) break;
-        if(expressions[i].a < 0.9) continue;
-        
-        vec3 rgbColor = expressions[i].rgb;
-        color = blend(color, lineColor(p, i, rgbColor));
+    int count[MAX_EXPR];
+    for(int k=0; k<maxExpr; ++k) {
+        count[k] = 0;
+    }
+
+    for(int i=0; i<AA; ++i) {
+        for(int j=0; j<AA; ++j) {
+            ivec2 np = p + ivec2(i, j);
+
+            bool[] lines = line(np);
+            for(int k=0; k<maxExpr; ++k) {
+                count[k] += int(lines[k]);
+            }
+        }
+    }
+
+    for(int k=0; k<maxExpr; ++k) {
+        vec4 lineColor = expressions[k] * (float(count[k]) / float(AA*AA));
+
+        if(lineColor.a > 0.0) {
+            color = blend(color, lineColor);
+        }
     }
 
     fragColor = color;
@@ -152,13 +184,14 @@ float fceil(float x) {
     return float(n);
 }
 float fabs(float x) {
-    if(fneg(x) == 1) 
+    if(fneg(x)) 
         return fminus(x);
     return x;
 }
-int fneg(float x) { //TODO:
-    if(x < 0.0) return 1;
-    return 0;
+bool fneg(float x) { //TODO:
+    if(x < 0.0) 
+        return true;
+    return false;
 }
 
 const float[] atanInverse2n = float[32](0.7853981633974483, 0.4636476090008061, 0.24497866312686414, 0.12435499454676144, 0.06241880999595735, 0.031239833430268277, 0.015623728620476831, 0.007812341060101111, 0.0039062301319669718, 0.0019531225164788188, 0.0009765621895593195, 0.0004882812111948983, 0.00024414062014936177, 0.00012207031189367021, 6.103515617420877e-05, 3.0517578115526096e-05, 1.5258789061315762e-05, 7.62939453110197e-06, 3.814697265606496e-06, 1.907348632810187e-06, 9.536743164059608e-07, 4.7683715820308884e-07, 2.3841857910155797e-07, 1.1920928955078068e-07, 5.960464477539055e-08, 2.9802322387695303e-08, 1.4901161193847655e-08, 7.450580596923828e-09, 3.725290298461914e-09, 1.862645149230957e-09, 9.313225746154785e-10, 4.656612873077393e-10);

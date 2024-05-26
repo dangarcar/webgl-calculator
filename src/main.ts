@@ -51,6 +51,9 @@ await listen(CHANGED_EMIT_CODE, async event => {
     if(payload.action == EditAction.ADD)
         eq.writeFunctionBrackets();
 
+    let exprIdx = Array.from(expressions, ([_k, v]) => v.number)
+        .findIndex(eId => eId == id);
+
     let variables: Set<string>;
     try {
         const varName = eq.variableCharacter();
@@ -89,7 +92,7 @@ await listen(CHANGED_EMIT_CODE, async event => {
             eq.showUndefinedVariables(variables)
 
             functionSet.set(fnName, id);
-            await addFunction(fnName, latex, eq, payload.action);
+            await addFunction(fnName, latex, eq, payload.action, exprIdx);
             eq.toggleError();
             return;
         }
@@ -100,12 +103,10 @@ await listen(CHANGED_EMIT_CODE, async event => {
     }
 
     try {
-        const response = <Response> await invoke("process", { eq: latex });
+        const response = <Response> await invoke("process", { eq: latex, exprIdx: exprIdx });
 
         if(response.num !== null && response.num !== undefined) {
             eq.setSolutionValue(response.num);
-            
-            eq.code = "return ivec2(0,0);";
         } else {
             eq.hideSolutionBox();
 
@@ -126,13 +127,13 @@ await listen(CHANGED_EMIT_CODE, async event => {
     eq.toggleError();
 });
 
-export const addFunction = async (fnName: string, latex: string, eq: EquationBox, action: EditAction) => {
+export const addFunction = async (fnName: string, latex: string, eq: EquationBox, action: EditAction, exprIdx: number) => {
     const code = latex.substring(latex.indexOf('=')+1);
     const unknown = Math.min(latex.indexOf('x')>0? latex.indexOf('x'):1e9, latex.indexOf('y')>0? latex.indexOf('y'):1e9);
 
     try {
         fnName += latex[unknown]!;
-        const response = <Response> await invoke('add_function', { name: fnName, content: code });
+        const response = <Response> await invoke('add_function', { name: fnName, content: code, exprIdx: exprIdx });
 
         if(action != EditAction.REFRESH)
             for(let id of expressions.keys())
