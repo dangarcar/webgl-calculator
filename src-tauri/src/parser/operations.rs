@@ -9,12 +9,12 @@ pub enum NAryOperation {
     Add, Multiply
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BinaryOperation {
     Division, Power, Equal
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum UnaryOperation {
     Minus, Sin, Cos, Tan, Floor, Abs, Ceil, Log, Ln, Sqrt, Fact
 }

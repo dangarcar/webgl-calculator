@@ -34,6 +34,7 @@ window.addEventListener('DOMContentLoaded', () => {
 })
 
 export interface Response {
+    bytecode: [{ins: number, arg: number}],
     code: string,
     num?: number,
 }
@@ -104,6 +105,7 @@ await listen(CHANGED_EMIT_CODE, async event => {
 
     try {
         const response = <Response> await invoke("process", { eq: latex, exprIdx: exprIdx });
+        console.log(response);
 
         if(response.num !== null && response.num !== undefined) {
             eq.setSolutionValue(response.num);

@@ -4,6 +4,10 @@ use log::info;
 
 use crate::{error::{self, AppError}, parser::{BinaryOperation, NAryOperation, Node, UnaryOperation}};
 
+use self::bytecode::{compile_to_bytecode, print_instructions};
+
+pub mod bytecode;
+mod tests;
 struct CompileState <'a> {
     variable_map: &'a HashMap<String, f64>,
     denominators: Vec<String>,
@@ -11,6 +15,9 @@ struct CompileState <'a> {
 }
 
 pub fn compile_to_string(root: &Node, variable_map: &HashMap<String, f64>, expr_idx: usize) -> error::Result<String> {
+    let bytecode = compile_to_bytecode(root, variable_map, expr_idx)?;
+    print_instructions(&bytecode);
+
     let unknowns = ast_unknowns(root)?;
     if unknowns == (false, false) {
         return Err(AppError::MathError(format!("This equation doesn't have any unknowns")));

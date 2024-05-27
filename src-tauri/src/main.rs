@@ -6,6 +6,7 @@ mod parser;
 mod compiler;
 
 use std::{collections::HashMap, sync::Mutex};
+use compiler::bytecode::{compile_to_bytecode, Instruction};
 use log::{debug, info, warn};
 use parser::Node;
 use tauri::State;
@@ -17,6 +18,7 @@ use crate::{compiler::{ast_unknowns, compile_to_string}, error::AppError, parser
 #[derive(Serialize, Deserialize, Debug)]
 struct Response {
     code: String,
+    bytecode: Vec<(i32, f64)>,
     num: Option<f64>
 }
 
@@ -41,13 +43,13 @@ fn process(eq: &str, state: State<GlobalState>, expr_idx: usize) -> error::Resul
     root.print_tree();
 
     match process_ast(&mut root, &vars, expr_idx)? {
-        Response { code, num: Some(n) } =>  {
+        Response { bytecode, code, num: Some(n) } =>  {
             info!("Expression {eq} evaluates to {n}");
-            Ok(Response { code, num: Some(n) })
+            Ok(Response { bytecode, code, num: Some(n) })
         }
-        Response { code, num: None } => {
+        Response { bytecode, code, num: None } => {
             info!("Expression {eq} has been compiled to {code}");
-            Ok(Response { code, num: None })
+            Ok(Response { bytecode, code, num: None })
         }
     }
 }
@@ -100,13 +102,13 @@ fn add_function(name: &str, content: &str, state: State<GlobalState>, expr_idx: 
     }
 
     let response = match process_ast(&mut root, &vars, expr_idx)? {
-        Response { code, num: Some(n) } =>  {
+        Response { bytecode, code, num: Some(n) } =>  {
             info!("Expression {content} evaluates to {n}");
-            Ok(Response { code, num: Some(n) })
+            Ok(Response { bytecode, code, num: Some(n) })
         }
-        Response { code, num: None } => {
+        Response { bytecode, code, num: None } => {
             info!("Expression {content} has been compiled to {code}");
-            Ok(Response { code, num: None })
+            Ok(Response { bytecode, code, num: None })
         }
     };
 
@@ -141,14 +143,18 @@ fn process_ast(root: &mut Node, variable_map: &HashMap<String, f64>, expr_idx: u
 
     if numeric_value.is_some() {
         Ok( Response { 
-            code: String::new(), 
+            code: String::new(),
+            bytecode: Vec::new(),
             num: numeric_value,
         } )   
     } else {
-        let code = compile_to_string(&root, variable_map, expr_idx)?;
+        let compiled = compile_to_string(&root, variable_map, expr_idx)?;
+        let bytecode = compile_to_bytecode(root, variable_map, expr_idx)?;
+        let bytecode: error::Result<Vec<_>> = bytecode.iter().map(Instruction::to_number_pair).collect();
 
         Ok( Response {
-            code,
+            bytecode: bytecode?,
+            code: compiled,
             num: None
         } )
     }
