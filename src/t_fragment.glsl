@@ -4,7 +4,6 @@
 
 #define PUSH(x) { stack[stackTop] = x; stackTop++; }
 #define POP(out) { out = stack[stackTop-1]; stackTop--; }
-#define STORE(val) { ret.negs[currentExpr] = val; }
 #define BINARY_OP(op) { float a,b; POP(b); POP(a); PUSH(a op b); }
 #define UNARY_OP(op) { float a; POP(a); PUSH( (op(a)) ); }
 
@@ -95,100 +94,93 @@ Instruction getInstruction(int i) {
     return Instruction(int(p.r), p.g);
 }
 
-evalColors ret;
-float stack[MAX_STACK_SIZE];
-int stackTop = 0;
-int currentExpr;
-int programCounter;
-
-void interpret(Instruction ins, float x, float y) {
-    switch(ins.code) {
-    case OP_ST_EXPR:
-        currentExpr = int(ins.arg) & MAX_STACK_SIZE;
-        break;
-    
-    case OP_PUSH:
-        PUSH(ins.arg);
-        break;
-    
-    case OP_PUSH_X:
-        PUSH(x);
-        break;
-    
-    case OP_PUSH_Y:
-        PUSH(y);
-        break;
-    
-    case OP_CPY:
-        PUSH(stack[stackTop-1]);
-        break;
-    
-    case OP_POP:
-        POP(float _popped);
-        break;
-    
-    case OP_STORE:
-        ret.negs[currentExpr] = fneg(stack[stackTop-1]);
-        break;
-
-    case OP_ADD:
-        BINARY_OP(+);
-        break;
-    
-    case OP_MUL:
-        BINARY_OP(*);
-        break;
-    
-    case OP_MINUS:
-        UNARY_OP(-);
-        break;
-
-    default:
-        break;
-}
-}
-
+uniform int jumpTable[MAX_EXPR];
 uniform int programLength; 
-evalColors eval(ivec2 p) {
+ivec2 eval(ivec2 p, int opt) {
     float pixel = (float(squareMant) * pow(10.0, float(squareExp))) / float(squareSize); 
     float unit = pixel/float(AA);
     float x = float(p.x)*unit, y = float(p.y)*unit;
 
-    for(int i=0; i<maxExpr; ++i) {
-        ret.negs[i] = false;
-        ret.dens[i] = 0;
-    }
+    float stack[MAX_STACK_SIZE];
+    int stackTop = 0;
+    int programCounter;
+    ivec2 ret;
 
-    for(currentExpr=0; currentExpr<maxExpr; currentExpr++) {
-        for(programCounter=0; programCounter<programLength; programCounter++) {
-            Instruction ins = getInstruction(programCounter);
+    for(programCounter=jumpTable[opt]; programCounter<programLength; programCounter++) {
+        Instruction ins = getInstruction(programCounter);
 
-            if(ins.code == OP_RET) 
-                break;
-            
-            interpret(ins, x, y);
+        if(ins.code == OP_RET) 
+            break;
+        
+        switch(ins.code) {
+        /*case OP_ST_EXPR:
+            currentExpr = int(ins.arg) & MAX_STACK_SIZE;
+            break;*/
+        
+        case OP_PUSH:
+            PUSH(ins.arg);
+            break;
+        
+        case OP_PUSH_X:
+            PUSH(x);
+            break;
+        
+        case OP_PUSH_Y:
+            PUSH(y);
+            break;
+        
+        case OP_CPY:
+            PUSH(stack[stackTop-1]);
+            break;
+        
+        case OP_POP:
+            POP(float _popped);
+            break;
+        
+        case OP_STORE:
+            ret.x = int(fneg(stack[stackTop-1]));
+            break;
+
+        case OP_ADD:
+            BINARY_OP(+);
+            break;
+        
+        case OP_MUL:
+            BINARY_OP(*);
+            break;
+        
+        case OP_MINUS:
+            UNARY_OP(-);
+            break;
         }
     }
 
     return ret;
 }
 
-bool[MAX_EXPR] line(ivec2 p) {
-    bool ret[MAX_EXPR];
+bool line(ivec2 p, int opt) {
+    ivec2 a = eval(p + ivec2(-WIDTH, -WIDTH), opt);
+    ivec2 b = eval(p + ivec2(WIDTH+1, WIDTH+1), opt);
+    ivec2 c = eval(p + ivec2(-WIDTH, WIDTH+1), opt);
+    ivec2 d = eval(p + ivec2(WIDTH+1, -WIDTH), opt);
 
-    evalColors a = eval(p + ivec2(-WIDTH, -WIDTH));
-    evalColors b = eval(p + ivec2(WIDTH+1, WIDTH+1));
-    evalColors c = eval(p + ivec2(-WIDTH, WIDTH+1));
-    evalColors d = eval(p + ivec2(WIDTH+1, -WIDTH));
+    int g = a.x + b.x + c.x + d.x;
+    bool denominators = a.y == b.y && b.y == c.y && c.y == d.y;
 
-    for(int i=0; i<maxExpr; ++i) {
-        int g = int(a.negs[i]) + int(b.negs[i]) + int(c.negs[i]) + int(d.negs[i]);
-        bool denominators = a.dens[i] == b.dens[i] && b.dens[i] == c.dens[i] && c.dens[i] == d.dens[i];
+    return 0 < g && g < 4 && denominators;
+}
 
-        ret[i] = 0 < g && g < 4 && denominators;
+vec4 lineColor(ivec2 p, int opt, vec3 rgb) {
+    int count = 0;
+    for(int i=0; i<AA; ++i) {
+        for(int j=0; j<AA; ++j) {
+            ivec2 np = p + ivec2(i, j);
+            count += int(line(np, opt));
+        }
     }
 
-    return ret;
+    float alpha = float(count)/float(AA*AA);
+    return vec4(rgb*alpha, alpha);
 }
 
 vec4 blend(vec4 a, vec4 b) {
@@ -210,28 +202,11 @@ void main() {
     ) * AA;
     vec4 color = vec4(0.0, 0.0, 0.0, 0.0);
 
-    int count[MAX_EXPR];
-    for(int k=0; k<maxExpr; ++k) {
-        count[k] = 0;
-    }
-
-    for(int i=0; i<AA; ++i) {
-        for(int j=0; j<AA; ++j) {
-            ivec2 np = p + ivec2(i, j);
-
-            bool[] lines = line(np);
-            for(int k=0; k<maxExpr; ++k) {
-                count[k] += int(lines[k]);
-            }
-        }
-    }
-
-    for(int k=0; k<maxExpr; ++k) {
-        vec4 lineColor = expressions[k] * (float(count[k]) / float(AA*AA));
-
-        if(lineColor.a > 0.0) {
-            color = blend(color, lineColor);
-        }
+    for(int i=0; i<maxExpr; i++) {
+        if(expressions[i].a < 0.9) continue;
+        
+        vec3 rgbColor = expressions[i].rgb;
+        color = blend(color, lineColor(p, i, rgbColor));
     }
 
     fragColor = color;

@@ -167,7 +167,9 @@ function compileEvalFunction() {
 }
 
 function compileEvalBytecode(gl: WebGL2RenderingContext) {
-    const bytecode = Array([0, 0], [2, 0], [4, 0], [33, 0], [1, 1], [32, 0], [3, 0], [64, 0], [32, 0], [6, 0], [7, 0], [255, 255]);
+    const bytecode = Array([0, 0], [2, 0], [4, 0], [33, 0], [1, 1], [32, 0], [3, 0], [64, 0], [32, 0], [6, 0], [7, 0],
+        [0, 0], [2, 0], [4, 0], [33, 0], [1, -1], [32, 0], [3, 0], [64, 0], [32, 0], [6, 0], [7, 0],
+    );
     
     const data = Float32Array.from(bytecode.flat(1));
     console.log(data);
@@ -178,6 +180,10 @@ function compileEvalBytecode(gl: WebGL2RenderingContext) {
     const programLengthLocation = gl.getUniformLocation(shaderProgram!, 'programLength');
     gl.uniform1i(programLengthLocation, height);
     
+    const jumpTableLocation = gl.getUniformLocation(shaderProgram!, 'jumpTable');
+    const vector = [0, 11, 0, 0, 0];
+    gl.uniform1iv(jumpTableLocation, vector);
+
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
