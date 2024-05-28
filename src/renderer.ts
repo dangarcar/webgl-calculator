@@ -7,11 +7,6 @@ let shaderProgram: WebGLProgram | null;
 const canvas = <HTMLCanvasElement> document.getElementById("calculator")!;
 const gl = canvas.getContext("webgl2", {premultipliedAlpha: false})!;
 
-const vtSource = `#version 300 es
-    in vec4 a_position;
-    void main() { gl_Position = a_position; }`;
-const vertexShader = createShader(gl, gl.VERTEX_SHADER, vtSource)!;
-
 export const draw = () => {
     updateCanvas = true;
 }
@@ -21,9 +16,14 @@ startRendering();
 
 async function startRendering() {
     const fsSource = await (await fetch('src/t_fragment.glsl')).text();
+    await initShaders(gl, fsSource);
+
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
 
     let positionLocation: number;
     let positionBuffer: WebGLBuffer;
+    let textureLocation: WebGLUniformLocation;
     await updateDraw();
 
     let oldTime = performance.now();
@@ -75,18 +75,14 @@ async function startRendering() {
         if(express.length > 0)
             gl.uniform4fv(expressionsLocation, express.flat(1));
 
-
         gl.drawArrays(gl.TRIANGLES, 0, 6);
 
         drawBack();
     })();
 
     async function updateDraw() {
-        const evalCode = compileEvalFunction();
-        console.log(evalCode) //FIXME:
-        initShader(gl, fsSource.replace('%replace%', evalCode));
-            
         positionLocation = gl.getAttribLocation(shaderProgram!, "a_position");
+        textureLocation = gl.getUniformLocation(shaderProgram!, "u_texture")!;
 
         positionBuffer = gl.createBuffer()!;
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
@@ -101,6 +97,12 @@ async function startRendering() {
                 1.0, 1.0]),
             gl.STATIC_DRAW
         );
+
+        compileEvalBytecode(gl);
+
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.uniform1i(textureLocation, 0);
     }
 
     function printFPS() {
@@ -131,11 +133,15 @@ function createShader(gl: WebGL2RenderingContext, type: number, source: string) 
     return shader;
 }
 
-async function initShader(gl: WebGL2RenderingContext, fsSource: string) {
-    let fs = fsSource;
-    fs = fs.replace("%side%", SIDE.toString());
+async function initShaders(gl: WebGL2RenderingContext, fsSource: string) {
+    const vtSource = `#version 300 es
+    in vec4 a_position;
+    void main() { gl_Position = a_position; }`;
 
-    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fs)!;
+    fsSource = fsSource.replace("%side%", SIDE.toString());
+
+    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fsSource)!;
+    const vertexShader = createShader(gl, gl.VERTEX_SHADER, vtSource)!;
 
     shaderProgram = gl.createProgram()!;
     gl.attachShader(shaderProgram, vertexShader);
@@ -158,4 +164,22 @@ function compileEvalFunction() {
     }
 
     return code;
+}
+
+function compileEvalBytecode(gl: WebGL2RenderingContext) {
+    const bytecode = Array([0, 0], [2, 0], [4, 0], [33, 0], [1, 1], [32, 0], [3, 0], [64, 0], [32, 0], [6, 0], [7, 0], [255, 255]);
+    
+    const data = Float32Array.from(bytecode.flat(1));
+    console.log(data);
+    const width = 1;
+    const height = bytecode.length;
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, width, height, 0, gl.RG, gl.FLOAT, data);
+
+    const programLengthLocation = gl.getUniformLocation(shaderProgram!, 'programLength');
+    gl.uniform1i(programLengthLocation, height);
+    
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 }

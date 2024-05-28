@@ -172,7 +172,7 @@ pub fn print_instructions(instructions: &Vec<Instruction>) {
 }
 
 impl Instruction {
-    pub fn to_number_pair(&self) -> error::Result<(i32, f64)> {
+    pub fn to_number_pair(&self) -> error::Result<(u8, f64)> {
         match &self {
             //Basic operations
             Instruction::StExpr(i) =>   Ok((0, *i as f64)),

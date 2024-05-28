@@ -1,11 +1,47 @@
 #version 300 es
 
-//#define SHADER_TEST
+#define SHADER_TEST
 
+#define PUSH(x) { stack[stackTop] = x; stackTop++; }
+#define POP(out) { out = stack[stackTop-1]; stackTop--; }
+#define STORE(val) { ret.negs[currentExpr] = val; }
+#define BINARY_OP(op) { float a,b; POP(b); POP(a); PUSH(a op b); }
+#define UNARY_OP(op) { float a; POP(a); PUSH( (op(a)) ); }
+
+//MEMORY OPERATORS
+#define OP_ST_EXPR 0
+#define OP_PUSH 1
+#define OP_PUSH_X 2
+#define OP_PUSH_Y 3
+#define OP_CPY 4
+#define OP_POP 5
+#define OP_STORE 6
+#define OP_RET 7
+
+//BINARY OPERATORS
+#define OP_ADD (32 | 0)
+#define OP_MUL (32 | 1)
+#define OP_DIV (32 | 2)
+#define OP_POW (32 | 3)
+
+//UNARY OPERATORS
+#define OP_MINUS (64 | 0)
+#define OP_SIN   (64 | 1)
+#define OP_COS   (64 | 2)
+#define OP_FLOOR (64 | 3)
+#define OP_ABS   (64 | 4)
+#define OP_CEIL  (64 | 5)
+#define OP_LOG   (64 | 6)
+#define OP_LN    (64 | 7)
+#define OP_SQRT  (64 | 8)
+#define OP_TAN   (64 | 9)
+
+//Global parameters
 #define TEO_WIDTH 1.0
 #define AA 2
 #define SIDE %side%
 #define MAX_EXPR 32
+#define MAX_STACK_SIZE 128
 
 precision highp float;
 precision highp int;
@@ -49,24 +85,90 @@ struct evalColors {
     int dens[MAX_EXPR];
 };
 
+uniform sampler2D u_texture;
+struct Instruction {
+    int code;
+    float arg;
+};
+Instruction getInstruction(int i) {
+    vec4 p = texelFetch(u_texture, ivec2(0, i), 0);
+    return Instruction(int(p.r), p.g);
+}
+
+evalColors ret;
+float stack[MAX_STACK_SIZE];
+int stackTop = 0;
+int currentExpr;
+int programCounter;
+
+void interpret(Instruction ins, float x, float y) {
+    switch(ins.code) {
+    case OP_ST_EXPR:
+        currentExpr = int(ins.arg) & MAX_STACK_SIZE;
+        break;
+    
+    case OP_PUSH:
+        PUSH(ins.arg);
+        break;
+    
+    case OP_PUSH_X:
+        PUSH(x);
+        break;
+    
+    case OP_PUSH_Y:
+        PUSH(y);
+        break;
+    
+    case OP_CPY:
+        PUSH(stack[stackTop-1]);
+        break;
+    
+    case OP_POP:
+        POP(float _popped);
+        break;
+    
+    case OP_STORE:
+        ret.negs[currentExpr] = fneg(stack[stackTop-1]);
+        break;
+
+    case OP_ADD:
+        BINARY_OP(+);
+        break;
+    
+    case OP_MUL:
+        BINARY_OP(*);
+        break;
+    
+    case OP_MINUS:
+        UNARY_OP(-);
+        break;
+
+    default:
+        break;
+}
+}
+
+uniform int programLength; 
 evalColors eval(ivec2 p) {
     float pixel = (float(squareMant) * pow(10.0, float(squareExp))) / float(squareSize); 
     float unit = pixel/float(AA);
     float x = float(p.x)*unit, y = float(p.y)*unit;
 
-    evalColors ret;
     for(int i=0; i<maxExpr; ++i) {
         ret.negs[i] = false;
         ret.dens[i] = 0;
     }
 
-#ifdef SHADER_TEST
-    ret.negs[0] = fneg(fsub(x, y));
-    ret.negs[1] = fneg(fsub(fsin(x), y));
-    ret.negs[2] = fneg(fsub(fmul(x, x), y));
-#else
-    %replace%
-#endif
+    for(currentExpr=0; currentExpr<maxExpr; currentExpr++) {
+        for(programCounter=0; programCounter<programLength; programCounter++) {
+            Instruction ins = getInstruction(programCounter);
+
+            if(ins.code == OP_RET) 
+                break;
+            
+            interpret(ins, x, y);
+        }
+    }
 
     return ret;
 }

@@ -18,7 +18,7 @@ use crate::{compiler::{ast_unknowns, compile_to_string}, error::AppError, parser
 #[derive(Serialize, Deserialize, Debug)]
 struct Response {
     code: String,
-    bytecode: Vec<(i32, f64)>,
+    bytecode: Vec<(u8, f64)>,
     num: Option<f64>
 }
 
