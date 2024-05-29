@@ -8,7 +8,7 @@ use super::{ast_unknowns, CompileState};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Instruction {
-    StExpr(usize), Push(f64), PushX, PushY, Cpy, Pop, Ret, Store, Add, Mul, Div, Pow, UnaryOperation(UnaryOperation)
+    Push(f64), PushX, PushY, Cpy, Pop, Ret, Store, Add, Mul, Div, Pow, UnaryOperation(UnaryOperation)
 }
 
 pub fn compile_to_bytecode(root: &Node, variable_map: &HashMap<String, f64>, expr_idx: usize) -> error::Result<Vec<Instruction>> {
@@ -23,7 +23,7 @@ pub fn compile_to_bytecode(root: &Node, variable_map: &HashMap<String, f64>, exp
         expr_idx
     };
 
-    let mut code = vec![Instruction::StExpr(expr_idx)];
+    let mut code = Vec::new();
 
     if let Node::Binary{ op_type: BinaryOperation::Equal, lhs: Some(lhs), rhs: Some(rhs) } = root {
         info!("The equation has an equal sign");
@@ -46,6 +46,7 @@ pub fn compile_to_bytecode(root: &Node, variable_map: &HashMap<String, f64>, exp
     code.push(Instruction::UnaryOperation(UnaryOperation::Minus));
     code.push(Instruction::Add);
     code.push(Instruction::Store);
+    code.push(Instruction::Ret);
 
     Ok(code)
 }
@@ -116,7 +117,8 @@ fn compile_bytecode(root: &Node, compile_state: &mut CompileState) -> error::Res
             if children.len() < 2 { 
                 Err(AppError::MathError(format!("A {op_type:?} cannot be of less than two terms"))) 
             } else {
-                let mut compiled: Vec<_> = children.iter().flat_map(|e| compile_bytecode(e, compile_state).unwrap()).collect();
+                let compiled: error::Result<Vec<Vec<Instruction>>> = children.iter().map(|e| compile_bytecode(e, compile_state)).collect();
+                let mut compiled: Vec<_> = compiled?.into_iter().flatten().collect();
 
                 for _ in 0..children.len()-1 {
                     compiled.push(op.clone());
@@ -155,7 +157,6 @@ pub fn print_instructions(instructions: &Vec<Instruction>) {
     for i in instructions {
         match i {
             Instruction::Store => println!("store"),
-            Instruction::StExpr(i) => println!("st_expr {i}"), 
             Instruction::Push(x) => println!("push {x}"),
             Instruction::PushX => println!("push_x"),
             Instruction::PushY => println!("push_y"),
@@ -175,14 +176,13 @@ impl Instruction {
     pub fn to_number_pair(&self) -> error::Result<(u8, f64)> {
         match &self {
             //Basic operations
-            Instruction::StExpr(i) =>   Ok((0, *i as f64)),
+            Instruction::Ret =>                 Ok((0, 0.0)),
             Instruction::Push(val) =>     Ok((1, *val)),
             Instruction::PushX =>               Ok((2, 0.0)),
             Instruction::PushY =>               Ok((3, 0.0)),
             Instruction::Cpy =>                 Ok((4, 0.0)),
             Instruction::Pop =>                 Ok((5, 0.0)),
             Instruction::Store =>               Ok((6, 0.0)),
-            Instruction::Ret =>                 Ok((7, 0.0)),
             
             //Binary operations
             Instruction::Add =>                 Ok((32 | 0, 0.0)),

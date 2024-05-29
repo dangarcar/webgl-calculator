@@ -191,10 +191,10 @@ fn handle_denominators(code: String, denominators: &Vec<String>, expr_idx: usize
     let dens = denominators.iter().enumerate().fold(String::new(), |s, (i, e)| {
         s + &format!("
             float var_{expr_idx}_{i} = {e};
-            ret.dens[{expr_idx}] <<= 1; 
-            ret.dens[{expr_idx}] |= int(fneg(var_{expr_idx}_{i}));")
+            ret.y <<= 1; 
+            ret.y |= int(fneg(var_{expr_idx}_{i}));")
     });
 
     Ok(format!("{dens}
-            ret.negs[{expr_idx}] = fneg({code});"))
+            ret.x = int(fneg({code}));"))
 }

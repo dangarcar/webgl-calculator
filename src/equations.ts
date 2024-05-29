@@ -61,6 +61,7 @@ export class EquationBox {
     solutionBox?: HTMLElement;
     undefVarsBar: UndefVariableBar;
     code?: string;
+    bytecode?: Array<Array<number>>;
 
     constructor(number: number, hue: number) {
         this.number = number;

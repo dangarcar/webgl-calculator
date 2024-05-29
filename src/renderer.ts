@@ -4,31 +4,54 @@ import { expressions } from "./equations";
 
 let shaderProgram: WebGLProgram | null;
 
+export enum DrawMode {
+    COMPILED, INTERPRETED
+};
+
 const canvas = <HTMLCanvasElement> document.getElementById("calculator")!;
 const gl = canvas.getContext("webgl2", {premultipliedAlpha: false})!;
 
-export const draw = () => {
+let updateCanvas = true;
+let recompileShaders = true;
+export function draw() {
     updateCanvas = true;
 }
 
-let updateCanvas = true;
+let drawMode = DrawMode.COMPILED; 
+export function changeDrawMode() {
+    if(drawMode == DrawMode.COMPILED) 
+        drawMode = DrawMode.INTERPRETED;
+    else
+        drawMode = DrawMode.COMPILED;
+
+    recompileShaders = true;
+} 
+
 startRendering();
 
 async function startRendering() {
-    const fsSource = await (await fetch('src/t_fragment.glsl')).text();
-    await initShaders(gl, fsSource);
-
-    const texture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-
+    let texture: WebGLTexture;
     let positionLocation: number;
     let positionBuffer: WebGLBuffer;
     let textureLocation: WebGLUniformLocation;
-    await updateDraw();
+    let fsSource: string;
 
     let oldTime = performance.now();
     let frames = 0;
     (async function render() {
+        if(recompileShaders) {
+            if(drawMode == DrawMode.INTERPRETED) {
+                fsSource = await getFragmentShaderSource();
+                await initShaders(gl, fsSource);
+
+                texture = gl.createTexture()!;
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+            }
+
+            updateCanvas = true;
+            recompileShaders = false;
+        }
+
         if(updateCanvas) {
             console.time("update");
             await updateDraw();
@@ -49,7 +72,7 @@ async function startRendering() {
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
         //@ts-ignore
         gl.enableVertexAttribArray(positionLocation);
-        //@ts-ignore
+        //@ts-ignore 
         gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
         if(!shaderProgram) throw Error("There is no webgl shader program");
@@ -81,9 +104,21 @@ async function startRendering() {
     })();
 
     async function updateDraw() {
-        positionLocation = gl.getAttribLocation(shaderProgram!, "a_position");
-        textureLocation = gl.getUniformLocation(shaderProgram!, "u_texture")!;
+        if(drawMode == DrawMode.INTERPRETED) {
+            textureLocation = gl.getUniformLocation(shaderProgram!, "u_texture")!;
+            
+            compileEvalBytecode(gl);
+            
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.uniform1i(textureLocation, 0);
+        } else {
+            fsSource = await getFragmentShaderSource();
+            await initShaders(gl, fsSource);
+        }
 
+        positionLocation = gl.getAttribLocation(shaderProgram!, "a_position");
+        
         positionBuffer = gl.createBuffer()!;
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
         gl.bufferData(
@@ -95,14 +130,8 @@ async function startRendering() {
                 -1.0, 1.0,
                 1.0, -1.0,
                 1.0, 1.0]),
-            gl.STATIC_DRAW
+                gl.STATIC_DRAW
         );
-
-        compileEvalBytecode(gl);
-
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.uniform1i(textureLocation, 0);
     }
 
     function printFPS() {
@@ -110,7 +139,7 @@ async function startRendering() {
         let dt = t - oldTime;
         if(dt > 1000) {
             const fps = document.getElementById('fps')!;
-            fps.innerHTML = "FPS: " + frames;
+            fps.innerHTML = `FPS: ${frames}<br> Mode: ${drawMode==DrawMode.INTERPRETED? "INTERPRETED":"COMPILED"}`;
             oldTime = t;
             frames = 0;
         }
@@ -138,8 +167,6 @@ async function initShaders(gl: WebGL2RenderingContext, fsSource: string) {
     in vec4 a_position;
     void main() { gl_Position = a_position; }`;
 
-    fsSource = fsSource.replace("%side%", SIDE.toString());
-
     const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fsSource)!;
     const vertexShader = createShader(gl, gl.VERTEX_SHADER, vtSource)!;
 
@@ -155,34 +182,63 @@ async function initShaders(gl: WebGL2RenderingContext, fsSource: string) {
     }
 }
 
+async function getFragmentShaderSource() {
+    const mainFile = await fetch('src/t_fragment.glsl');
+    const mathFile = await fetch('src/math.glsl');
+
+    let fsSource = await mainFile.text();
+    fsSource = fsSource.replace("%INCLUDE_MATH%", await mathFile.text());
+    fsSource = fsSource.replace("%side%", SIDE.toString());
+
+    const interpreted_define = drawMode == DrawMode.INTERPRETED? "#define INTERPRETED":"#undef INTERPRETED";
+    fsSource = fsSource.replace("%INCLUDE_INTERPRETED%", interpreted_define);
+
+    const func = compileEvalFunction();
+    console.log(func);
+    fsSource = fsSource.replace("%REPLACE_CODE%", func);
+
+    return fsSource;
+}
+
 function compileEvalFunction() {    
     const evals = Array.from(expressions, ([_k, v]) => v.code);
     let code = "";
     for(let i in evals) {
-        if(evals[i])
-            code += evals[i] + '\n';
+        if(evals[i]) {
+            code += `
+            case ${i}:
+                ${evals[i]}
+                break;
+            `;
+        }
     }
 
     return code;
 }
 
 function compileEvalBytecode(gl: WebGL2RenderingContext) {
-    const bytecode = Array([0, 0], [2, 0], [4, 0], [33, 0], [1, 1], [32, 0], [3, 0], [64, 0], [32, 0], [6, 0], [7, 0],
-        [0, 0], [2, 0], [4, 0], [33, 0], [1, -1], [32, 0], [3, 0], [64, 0], [32, 0], [6, 0], [7, 0],
-    );
+    const codes = Array.from(expressions, ([_k, v]) => v.bytecode? v.bytecode.flat(1) : [0, 0]);
+    const bytecode: number[] = [];
+    const jumpTable: number[] = [];
+    for(let i in codes) {
+        jumpTable[i] = bytecode.length / 2;
+        codes[i]?.forEach(e => bytecode.push(e));
+    }
     
-    const data = Float32Array.from(bytecode.flat(1));
+    const data = Float32Array.from(bytecode);
+
     console.log(data);
+    console.log(jumpTable);
+
     const width = 1;
-    const height = bytecode.length;
+    const height = bytecode.length / 2;
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, width, height, 0, gl.RG, gl.FLOAT, data);
 
     const programLengthLocation = gl.getUniformLocation(shaderProgram!, 'programLength');
     gl.uniform1i(programLengthLocation, height);
     
     const jumpTableLocation = gl.getUniformLocation(shaderProgram!, 'jumpTable');
-    const vector = [0, 11, 0, 0, 0];
-    gl.uniform1iv(jumpTableLocation, vector);
+    gl.uniform1iv(jumpTableLocation, jumpTable);
 
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);

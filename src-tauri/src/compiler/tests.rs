@@ -29,20 +29,17 @@ impl Interpreter {
     pub fn run(&mut self, x: f64, y: f64) -> [f64; MAX_EXPR] {
         let mut output = [0.0; MAX_EXPR];
 
-        while self.program[self.program_counter] != Instruction::Ret {
+        while self.program_counter < self.program.len() {
             match &self.program[self.program_counter] {
                 Instruction::Push(val) => self.push(*val),
                 Instruction::PushX => self.push(x),
                 Instruction::PushY => self.push(y),
                 Instruction::Cpy => self.push(self.stack[self.stack_top-1]),
 
-                Instruction::Ret => (),
+                Instruction::Ret => { self.current_expr += 1; },
                 Instruction::Store => {
                     output[self.current_expr] = self.stack[self.stack_top-1];
                     self.pop();
-                }
-                Instruction::StExpr(i) => {
-                    self.current_expr = *i;
                 }
                 Instruction::Pop => {
                     self.pop();
@@ -95,7 +92,6 @@ mod test {
     fn basic_operations() {
         // 2 + 4*5 = 22
         let program = vec![
-            Instruction::StExpr(0),
             Instruction::Push(2.0),
             Instruction::Push(4.0),
             Instruction::Push(5.0),
@@ -116,7 +112,6 @@ mod test {
     fn unary_operations() {
         // 5 - 8/2 = 1
         let program = vec![
-            Instruction::StExpr(0),
             Instruction::Push(5.0),
             Instruction::Push(8.0),
             Instruction::Push(2.0),
@@ -138,7 +133,6 @@ mod test {
     fn multiple_operations() {
         // 5 - 8/2 = 1 && 2 + 4*5 = 22
         let program = vec![
-            Instruction::StExpr(0),
             Instruction::Push(5.0),
             Instruction::Push(8.0),
             Instruction::Push(2.0),
@@ -146,8 +140,8 @@ mod test {
             Instruction::UnaryOperation(UnaryOperation::Minus),
             Instruction::Add,
             Instruction::Store,
+            Instruction::Ret,
 
-            Instruction::StExpr(1),
             Instruction::Push(2.0),
             Instruction::Push(4.0),
             Instruction::Push(5.0),

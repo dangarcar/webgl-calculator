@@ -1,7 +1,7 @@
 import { returnHome } from "./background";
 import { CHANGED_EMIT_CODE, EditAction, EditPayload, EquationBox, expressions, functionSet, variableSet } from "./equations";
 import { listen } from "@tauri-apps/api/event";
-import { draw } from "./renderer";
+import { changeDrawMode, draw } from "./renderer";
 import { invoke } from "@tauri-apps/api";
 
 const moreBtn = document.getElementById("more");
@@ -33,8 +33,14 @@ window.addEventListener('DOMContentLoaded', () => {
     draw();
 })
 
+window.addEventListener('keyup', e => {
+    if(e.key == "Escape") {
+        changeDrawMode();
+    }
+})
+
 export interface Response {
-    bytecode: [{ins: number, arg: number}],
+    bytecode: number[][],
     code: string,
     num?: number,
 }
@@ -105,7 +111,6 @@ await listen(CHANGED_EMIT_CODE, async event => {
 
     try {
         const response = <Response> await invoke("process", { eq: latex, exprIdx: exprIdx });
-        console.log(response);
 
         if(response.num !== null && response.num !== undefined) {
             eq.setSolutionValue(response.num);
@@ -113,11 +118,10 @@ await listen(CHANGED_EMIT_CODE, async event => {
             eq.hideSolutionBox();
 
             eq.code = response.code;
+            eq.bytecode = response.bytecode;
         }
 
-        console.time();
         await draw();
-        console.timeEnd();
     } catch(error) {
         if(!(<string> error).startsWith("Empty error")) {
             console.warn(error);
