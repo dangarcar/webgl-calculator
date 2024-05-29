@@ -74,7 +74,7 @@ fn compile(root: &Node, compile_state: &mut CompileState) -> error::Result<Strin
                 UnaryOperation::Ln => Ok(format!("fln({compiled_child})")), 
                 
                 UnaryOperation::Tan => compile_div(format!("fsin({compiled_child})"), format!("fcos({compiled_child})"), compile_state), 
-                UnaryOperation::Sqrt => Ok(format!("fexp(fmul(fln({compiled_child}), 0.5))")), 
+                UnaryOperation::Sqrt => Ok(format!("fsqrt({compiled_child})")), 
                 
                 UnaryOperation::Fact => Err(AppError::MathError("Factorial isn't implemented yet!".to_owned())),
             }
@@ -94,7 +94,7 @@ fn compile(root: &Node, compile_state: &mut CompileState) -> error::Result<Strin
                         }
                     }
 
-                    Ok(format!("fexp(fmul(fln({compiled_lhs}), {compiled_rhs}))"))
+                    Ok(format!("fpow({compiled_lhs}, {compiled_rhs})"))
                 }
                 BinaryOperation::Equal => Err(AppError::MathError("Equal is not an operation in this context".to_owned())),
             }

@@ -9,7 +9,19 @@ const float LN10 = 2.30258509299;
 //ONE ARGUMENT PRIMITIVES
 float fexp(float x) { return exp(x); }
 float fminus(float x) { return -x; }
-float fln(float x) { return log(x); }
+float fln(float x) { 
+    if(x <= 0.0)
+        return -1e1000;
+    return log(x);    
+}
+float fsqrt(float x) {
+    if(x < 0.0)
+        return -1e1000;
+    return sqrt(x);
+}
+float fpow(float base, float ex) {
+    return pow(base, ex);
+}
 float ffloor(float x) {
     int n = int(x);
     return float(n);
@@ -41,9 +53,6 @@ float fmod(float x, float y) {
     return res;
 }
 
-float fpow(float base, float ex) {
-    return fexp(fmul(ex, fln(base)));
-}
 float flog(float x) {
     return fdiv(fln(x), LN10);
 }

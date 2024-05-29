@@ -162,7 +162,7 @@ ivec2 eval(ivec2 p, int opt) {
             break;
         
         case OP_SQRT:
-            UNARY_OP(sqrt);
+            UNARY_OP(fsqrt);
             break;
 
         case OP_TAN:
