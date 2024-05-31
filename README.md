@@ -9,16 +9,16 @@ It has:
 
 ![Screenshot of the app](src/assets/screenshot.png)
 
-## How it works
+# How it works
 The user inputs a equation, like in Desmos, an it is send to the backend written in LaTeX, made in Rust. 
 Then the Rust Backend compiles the equation and it sends it back to the TS frontend, were it is send to the graphics card, where it is interpreted and graphed in the fragment shader.
 
 It can be drawn in two ways:
-#### Compiled mode
-The fragment shader is recompiled every time a expression is changed to execute the instructions in code in the GPU.
+### - Compiled mode
+  The fragment shader is recompiled every time a expression is changed to execute the instructions in code in the GPU.
 
-#### Interpreted mode
-The fragment shader is compiled only once and the expressions' instructions are sent in a bytecode-like program in a texture. This is usually slower due to a lot of branching in the GPU.
+### - Interpreted mode
+  The fragment shader is compiled only once and the expressions' instructions are sent in a bytecode-like program in a texture. This is usually slower due to a lot of branching in the GPU.
 
 ## Tecnologies used
 - Tauri
@@ -27,7 +27,7 @@ The fragment shader is compiled only once and the expressions' instructions are 
 - WebGL2
 - MathQuill JS
 
-## How to run
+# How to run
 First make sure you have installed on your system everything that is explained [here](https://tauri.app/v1/guides/getting-started/prerequisites)
 
 Execute the command:
