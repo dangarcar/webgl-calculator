@@ -1,6 +1,6 @@
 [package]
 name = "webgl_calculator"
-version = "0.0.0"
+version = "1.0.0"
 description = "A calculator made with WebGL2"
 authors = ["dangarcar"]
 edition = "2021"
