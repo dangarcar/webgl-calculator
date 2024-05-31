@@ -1,4 +1,4 @@
-#version 300 es
+export const T_FRAGMENT_GLSL = `#version 300 es
 
 precision highp float;
 precision highp int;
@@ -243,4 +243,4 @@ void main() {
 
     fragColor = color;
 }
-
+`

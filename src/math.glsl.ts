@@ -1,3 +1,4 @@
+export const MATH_GLSL = `
 const float PI = 3.141592653589793115997963468544185161590576171875;
 const float PI_2 = PI/2.0;
 const float TAU = 2.0*PI;
@@ -128,3 +129,4 @@ float fcos(float x) {
     else
         return result;
 }
+`

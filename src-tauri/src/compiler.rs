@@ -6,8 +6,10 @@ use crate::{error::{self, AppError}, parser::{BinaryOperation, NAryOperation, No
 
 use self::bytecode::{compile_to_bytecode, print_instructions};
 
-pub mod bytecode;
+#[cfg(test)]
 mod tests;
+pub mod bytecode;
+
 struct CompileState <'a> {
     variable_map: &'a HashMap<String, f64>,
     denominators: Vec<String>,

@@ -16,7 +16,7 @@ Then the Rust Backend compiles the equation and it sends it back to the TS front
 ## Tecnologies used
 - Tauri
 - Rust
-- Typescript
+- Typescript with Vite
 - WebGL2
 - MathQuill JS
 

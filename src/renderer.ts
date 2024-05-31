@@ -1,6 +1,8 @@
 import { ColorTranslator } from "colortranslator";
 import { SIDE, backState, drawBack } from "./background";
 import { expressions } from "./equations";
+import { MATH_GLSL } from "./math.glsl";
+import { T_FRAGMENT_GLSL } from "./t_fragment.glsl";
 
 let shaderProgram: WebGLProgram | null;
 
@@ -183,11 +185,8 @@ async function initShaders(gl: WebGL2RenderingContext, fsSource: string) {
 }
 
 async function getFragmentShaderSource() {
-    const mainFile = await fetch('src/t_fragment.glsl');
-    const mathFile = await fetch('src/math.glsl');
-
-    let fsSource = await mainFile.text();
-    fsSource = fsSource.replace("%INCLUDE_MATH%", await mathFile.text());
+    let fsSource = T_FRAGMENT_GLSL;
+    fsSource = fsSource.replace("%INCLUDE_MATH%", MATH_GLSL);
     fsSource = fsSource.replace("%side%", SIDE.toString());
 
     const interpreted_define = drawMode == DrawMode.INTERPRETED? "#define INTERPRETED":"#undef INTERPRETED";

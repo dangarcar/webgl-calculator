@@ -1,8 +1,8 @@
 [package]
-name = "vanilla-ts"
+name = "webgl_calculator"
 version = "0.0.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "A calculator made with WebGL2"
+authors = ["dangarcar"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -11,14 +11,13 @@ edition = "2021"
 tauri-build = { version = "1", features = [] }
 
 [dependencies]
-tauri = { version = "1", features = ["shell-open"] }
+tauri = { version = "1", features = [ "api-all"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "1.0.58"
 tex-parser = "0.1.0"
 env_logger = "0.11.3"
 log = "0.4.21"
-# unlatex = "0.1.0"
 
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!

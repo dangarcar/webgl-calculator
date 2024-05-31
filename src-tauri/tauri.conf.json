@@ -7,20 +7,18 @@
     "withGlobalTauri": true
   },
   "package": {
-    "productName": "tauri.calculator",
-    "version": "0.1.0"
+    "productName": "webgl-calculator",
+    "version": "0.0.0"
   },
   "tauri": {
     "allowlist": {
-      "all": false,
-      "shell": {
-        "all": false,
-        "open": true
-      }
+      "all": true
     },
     "windows": [
       {
-        "title": "Tauri Calculator",
+        "title": "WebGL Calculator",
+        "fullscreen": false,
+        "resizable": false,
         "width": 1200,
         "height": 800
       }

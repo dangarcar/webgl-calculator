@@ -45,7 +45,7 @@ export interface Response {
     num?: number,
 }
 
-await listen(CHANGED_EMIT_CODE, async event => {
+listen(CHANGED_EMIT_CODE, async event => {
     const payload = <EditPayload> event.payload;
     const id = payload.id;
     const eq = expressions.get(id);
@@ -54,6 +54,10 @@ await listen(CHANGED_EMIT_CODE, async event => {
     if(!eq) throw Error("There isn't any equations to edit");
     //Suppose there aren't any errors right now, we'll discover them later
     eq.error = false;
+
+    //Suppose this equation has no code
+    eq.code = undefined;
+    eq.bytecode = undefined;
 
     if(payload.action == EditAction.ADD)
         eq.writeFunctionBrackets();
