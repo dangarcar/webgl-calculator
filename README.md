@@ -21,7 +21,11 @@ Then the Rust Backend compiles the equation and it sends it back to the TS front
 - MathQuill JS
 
 ## How to run
+First make sure you have installed on your system everything that is explained [here](https://tauri.app/v1/guides/getting-started/prerequisites)
+
 Execute the command:
 ```console
-npm run tauri dev 
+cargo install tauri-cli
+npm install
+cargo tauri build
 ```
