@@ -151,6 +151,7 @@ export const addFunction = async (fnName: string, latex: string, eq: EquationBox
                     expressions.get(id)?.refresh();
 
         eq.code = response.code;
+        eq.bytecode = response.bytecode;
         await draw();
     } catch(error) {
         if(!(<string> error).startsWith("Empty error")) {
