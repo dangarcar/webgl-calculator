@@ -32,8 +32,8 @@ First make sure you have installed on your system everything that is explained [
 
 Execute the command:
 ```console
-git clone https://github.com/dangarcar/webgl-calculator.git
-cd webgl-calculator
+git clone https://github.com/dangarcar/webgl-calculator-tauri.git
+cd webgl-calculator-tauri
 cargo install tauri-cli
 npm install
 cargo tauri build
